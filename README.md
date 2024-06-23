@@ -1,34 +1,162 @@
-# Hierarchy
+# Discord Bot
 
-discord_bot_project/
-├── bot.py
-├── cogs/
-│   ├── __init__.py
-│   ├── admin.py
-│   ├── fun.py
-│   ├── info.py
-│   ├── moderation.py
-│   └── welcome.py
-├── data/
-│   ├── config.json
-│   └── jokes.json
-├── requirements.txt
-├── Dockerfile
-└── README.md
+A Discord bot built using `discord.py` for various functionalities such as moderation, fun commands, informational commands, and more. This bot is containerized using Docker and can be easily deployed using Docker and GitHub Actions.
 
-## Explanation of the Structure
+## Features
 
-    - bot.py: The main entry point of your bot.
-    - cogs/: A directory for all your bot's features, organized into separate modules (also known as cogs in discord.py).
-      - __init__.py: An empty file that makes Python treat the directory as a package.
-      - admin.py: Module for administration commands (e.g., role management).
-      - fun.py: Module for fun commands (e.g., dice rolling, jokes).
-      - info.py: Module for informational commands (e.g., userinfo).
-      - moderation.py: Module for moderation commands (e.g., kick, ban).
-      - welcome.py: Module for welcome and goodbye messages.
-    - data/: A directory for configuration files and other data.
-      - config.json: Configuration file for storing bot settings, tokens, etc.
-      - jokes.json: File for storing jokes or other static data.
-    - requirements.txt: File listing the Python dependencies.
-    - Dockerfile: File to containerize your bot.
-    - README.md: Documentation for your project.
+- **Welcome and Goodbye Messages**: Sends welcome messages when a new member joins and goodbye messages when a member leaves.
+- **Moderation Commands**: Includes commands like kick and ban.
+- **Role Management**: Add or remove roles from users.
+- **Fun Commands**: Commands like dice rolling and jokes.
+- **Informational Commands**: Commands to fetch user information.
+
+## Setup Instructions
+
+### Prerequisites
+
+- Python 3.9+
+- Docker
+- Docker Compose (optional, for easier deployment)
+- GitHub account
+- Docker Hub account
+
+### Local Development
+
+1. **Clone the Repository**:
+
+   ```bash
+   git clone https://github.com/d-daemon/discord-bot.git
+   cd discord-bot
+    ```
+
+2. Install Dependencies:
+
+  ```bash
+  pip install -r requirements.txt
+  ```
+
+3. Create Configuration Files:
+
+Create a `config.json` file in the data directory:
+
+  ```json
+  {
+    "prefix": "!"
+  }
+  ```
+
+4. Set Environment Variables:
+
+Create a `.env` file in the root directory with the following content:
+
+  ```dotenv
+  DISCORD_BOT_TOKEN=your_bot_token_here
+  ```
+
+5. Run the Bot:
+
+  ```bash
+  python bot.py
+  ```
+
+### Docker Setup
+
+1. Build the Docker Image:
+
+  ```bash
+  docker build -t discord-bot .
+  ```
+
+2. Run the Docker Container:
+
+  ```bash
+  docker run -d --name discord-bot -e DISCORD_BOT_TOKEN=your_bot_token_here -p 26218:5000 discord-bot
+  ```
+
+### Docker Compose
+
+1. Create a `docker-compose.yml` File:
+
+  ```yaml
+  version: '3'
+  
+  services:
+    discord-bot:
+      image: d-daemon/discord-bot:latest
+      container_name: discord-bot
+      ports:
+        - 26218:5000
+      restart: always
+      environment:
+        - DISCORD_BOT_TOKEN=your_bot_token_here
+  ```
+
+2. Deploy with Docker Compose:
+
+```bash
+docker-compose up -d
+```
+
+### GitHub Actions and Docker Hub
+
+1. Set Up GitHub Secrets:
+
+Go to your repository on GitHub and add the following secrets:
+
+  - `DOCKER_USERNAME`: Your Docker Hub username.
+  - `DOCKER_PASSWORD`: Your Docker Hub password.
+  - `DISCORD_BOT_TOKEN`: Your Discord bot token.
+
+2. Create a GitHub Actions Workflow:
+
+Create a file named `docker-image.yml` in the `.github/workflows` directory with the following content. 
+
+  ```yaml
+  name: Docker
+
+  on:
+    push:
+      branches:
+        - master
+
+  jobs:
+    build:
+      runs-on: ubuntu-latest
+
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v2
+
+        - name: Set up Docker Buildx
+          uses: docker/setup-buildx-action@v1
+
+        - name: Log in to Docker Hub
+          uses: docker/login-action@v1
+          with:
+            username: ${{ secrets.DOCKER_USERNAME }}
+            password: ${{ secrets.DOCKER_PASSWORD }}
+
+        - name: Build and push Docker image
+          uses: docker/build-push-action@v2
+          with:
+            push: true
+            tags: d-daemon/discord-bot:latest
+
+        - name: Deploy
+          env:
+            DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          run: docker run -d --name discord-bot -e DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }} -p 26218:5000 d-daemon/discord-bot:latest
+  ```
+
+### Contributing
+1. Fork the repository.
+2. Create a new branch (git checkout -b feature/YourFeature).
+3. Commit your changes (git commit -m 'Add Your Feature').
+4. Push to the branch (git push origin feature/YourFeature).
+5. Create a new Pull Request.
+
+### License
+
+This project is licensed under the MIT License. See the [LICENSE](https://github.com/d-daemon/discord-bot/blob/master/LICENSE) file for more information.
+
+This README provides a comprehensive guide to setting up and running your Discord bot, both locally and in Docker, as well as deploying it using GitHub Actions and Docker Hub. If you need any adjustments or additional information, feel free to ask!
