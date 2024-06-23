@@ -2,6 +2,13 @@
 
 ![Build Status](https://github.com/d-daemon/discord-bot/actions/workflows/docker-image.yml/badge.svg)
 ![Python Version](https://img.shields.io/badge/Python-3.9-blue.svg)
+![License](https://img.shields.io/github/license/hhxcusco/discord-bot)
+![Docker Pulls](https://img.shields.io/docker/pulls/hhxcusco/discord-bot)
+![Docker Image Size](https://img.shields.io/docker/image-size/hhxcusco/discord-bot/latest)
+![GitHub Issues](https://img.shields.io/github/issues/hhxcusco/discord-bot)
+![GitHub Forks](https://img.shields.io/github/forks/hhxcusco/discord-bot)
+![Last Commit](https://img.shields.io/github/last-commit/hhxcusco/discord-bot)
+
 
 A Discord bot built using `discord.py` for various functionalities such as moderation, fun commands, informational commands, and more. This bot is containerized using Docker and can be easily deployed using Docker and GitHub Actions.
 
