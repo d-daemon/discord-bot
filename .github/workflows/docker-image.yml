@@ -31,4 +31,4 @@ jobs:
       - name: Deploy
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-        run: docker run -d --name discord-bot -e DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }} -p 26218:5000 yourusername/discord-bot:latest
+        run: docker run -d --name discord-bot -e DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }} -p 26218:5000 d-daemon/discord-bot:latest
