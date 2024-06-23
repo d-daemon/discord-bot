@@ -10,7 +10,13 @@ with open('data/config.json') as f:
 TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 PREFIX = config['prefix']
 
-bot = commands.Bot(command_prefix=PREFIX)
+# Define intents
+intents = discord.Intents.default()
+intents.typing = False
+intents.presences = False
+intents.members = True  # Add this if your bot needs to access member information
+
+bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 
 # Load cogs
 initial_extensions = [
