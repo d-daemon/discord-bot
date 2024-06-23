@@ -15,6 +15,7 @@ intents = discord.Intents.default()
 intents.typing = False
 intents.presences = False
 intents.members = True  # Enable this if your bot needs to access member information
+intents.message_content = True  # Enable the message content intent
 
 class MyBot(commands.Bot):
     async def setup_hook(self):
