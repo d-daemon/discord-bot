@@ -14,8 +14,9 @@ PREFIX = config['prefix']
 intents = discord.Intents.default()
 intents.typing = False
 intents.presences = False
-intents.members = True  # Add this if your bot needs to access member information
+intents.members = True  # Enable this if your bot needs to access member information
 
+# Initialize bot with intents
 bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 
 # Load cogs
@@ -27,12 +28,13 @@ initial_extensions = [
     'cogs.welcome'
 ]
 
-if __name__ == '__main__':
+async def load_extensions():
     for extension in initial_extensions:
-        bot.load_extension(extension)
+        await bot.load_extension(extension)
 
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user.name}')
 
+bot.loop.create_task(load_extensions())
 bot.run(TOKEN)
