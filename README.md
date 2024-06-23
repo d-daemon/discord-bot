@@ -151,14 +151,14 @@ Create a file named `docker-image.yml` in the `.github/workflows` directory with
           run: docker run -d --name discord-bot -e DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }} -p 26218:5000 hhxcusco/discord-bot:latest
   ```
 
-### Contributing
+## Contributing
 1. Fork the repository.
-2. Create a new branch (git checkout -b feature/YourFeature).
-3. Commit your changes (git commit -m 'Add Your Feature').
-4. Push to the branch (git push origin feature/YourFeature).
+2. Create a new branch (`git checkout -b feature/YourFeature`).
+3. Commit your changes (`git commit -m 'Add Your Feature'`).
+4. Push to the branch (`git push origin feature/YourFeature`).
 5. Create a new Pull Request.
 
-### License
+## License
 
 This project is licensed under the MIT License. See the [LICENSE](https://github.com/d-daemon/discord-bot/blob/master/LICENSE) file for more information.
 
