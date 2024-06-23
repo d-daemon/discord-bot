@@ -1,3 +1,4 @@
+import os
 import discord
 from discord.ext import commands
 import json
@@ -6,7 +7,7 @@ import json
 with open('data/config.json') as f:
     config = json.load(f)
 
-TOKEN = config['token']
+TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 PREFIX = config['prefix']
 
 bot = commands.Bot(command_prefix=PREFIX)
