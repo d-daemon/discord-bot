@@ -100,7 +100,7 @@ Create a `config.json` file in the data directory:
 docker-compose up -d
 ```
 
-## GitHub Actions and Docker Hub
+### GitHub Actions and Docker Hub
 
 1. Set Up GitHub Secrets:
 
