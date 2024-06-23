@@ -1,5 +1,8 @@
 # Discord Bot
 
+![Build Status](https://github.com/d-daemon/discord-bot/actions/workflows/docker-image.yml/badge.svg)
+![Python Version](https://img.shields.io/badge/Python-3.9-blue.svg)
+
 A Discord bot built using `discord.py` for various functionalities such as moderation, fun commands, informational commands, and more. This bot is containerized using Docker and can be easily deployed using Docker and GitHub Actions.
 
 ## Features
@@ -17,8 +20,8 @@ A Discord bot built using `discord.py` for various functionalities such as moder
 - Python 3.9+
 - Docker
 - Docker Compose (optional, for easier deployment)
-- GitHub account
-- Docker Hub account
+- [GitHub account](https://github.com/)
+- [Docker Hub account](https://hub.docker.com/)
 
 ### Local Development
 
@@ -82,7 +85,7 @@ Create a `config.json` file in the data directory:
   
   services:
     discord-bot:
-      image: d-daemon/discord-bot:latest
+      image: hhxcusco/discord-bot:latest
       container_name: discord-bot
       ports:
         - 26218:5000
@@ -140,12 +143,12 @@ Create a file named `docker-image.yml` in the `.github/workflows` directory with
           uses: docker/build-push-action@v2
           with:
             push: true
-            tags: d-daemon/discord-bot:latest
+            tags: hhxcusco/discord-bot:latest
 
         - name: Deploy
           env:
             DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          run: docker run -d --name discord-bot -e DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }} -p 26218:5000 d-daemon/discord-bot:latest
+          run: docker run -d --name discord-bot -e DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }} -p 26218:5000 hhxcusco/discord-bot:latest
   ```
 
 ### Contributing
