@@ -16,25 +16,23 @@ intents.typing = False
 intents.presences = False
 intents.members = True  # Enable this if your bot needs to access member information
 
+class MyBot(commands.Bot):
+    async def setup_hook(self):
+        initial_extensions = [
+            'cogs.admin',
+            'cogs.fun',
+            'cogs.info',
+            'cogs.moderation',
+            'cogs.welcome'
+        ]
+        for extension in initial_extensions:
+            await self.load_extension(extension)
+
 # Initialize bot with intents
-bot = commands.Bot(command_prefix=PREFIX, intents=intents)
-
-# Load cogs
-initial_extensions = [
-    'cogs.admin',
-    'cogs.fun',
-    'cogs.info',
-    'cogs.moderation',
-    'cogs.welcome'
-]
-
-async def load_extensions():
-    for extension in initial_extensions:
-        await bot.load_extension(extension)
+bot = MyBot(command_prefix=PREFIX, intents=intents)
 
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user.name}')
 
-bot.loop.create_task(load_extensions())
 bot.run(TOKEN)
