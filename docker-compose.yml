@@ -1,0 +1,12 @@
+version: '3'
+services:
+  discord-bot:
+    image: hhxcusco/discord-bot:latest
+    container_name: discord-bot
+    ports:
+      - "26218:5000"  # Map port 26218 on the host to port 5000 in the container
+    environment:
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}  # Use the environment variable
+    volumes:
+      - /volume1/docker/discord-bot/config:/app/data  # Persistent data storage
+    restart: always  # Always restart the container if it stops
