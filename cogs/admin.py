@@ -17,5 +17,5 @@ class Admin(commands.Cog):
         await member.remove_roles(role)
         await ctx.send(f'Removed {role.mention} from {member.mention}')
 
-def setup(bot):
-    bot.add_cog(Admin(bot))
+async def setup(bot):
+    await bot.add_cog(Admin(bot))

@@ -28,5 +28,5 @@ class Fun(commands.Cog):
                 else:
                     await ctx.send('Could not retrieve joke at this time.')
 
-def setup(bot):
-    bot.add_cog(Fun(bot))
+async def setup(bot):
+    await bot.add_cog(Fun(bot))

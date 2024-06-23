@@ -17,5 +17,5 @@ class Welcome(commands.Cog):
         if channel:
             await channel.send(f'{member.mention} has left the server. Goodbye!')
 
-def setup(bot):
-    bot.add_cog(Welcome(bot))
+async def setup(bot):
+    await bot.add_cog(Welcome(bot))

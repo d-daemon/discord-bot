@@ -10,20 +10,26 @@ with open('data/config.json') as f:
 TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 PREFIX = config['prefix']
 
-bot = commands.Bot(command_prefix=PREFIX)
+# Define intents
+intents = discord.Intents.default()
+intents.typing = False
+intents.presences = False
+intents.members = True  # Enable this if your bot needs to access member information
 
-# Load cogs
-initial_extensions = [
-    'cogs.admin',
-    'cogs.fun',
-    'cogs.info',
-    'cogs.moderation',
-    'cogs.welcome'
-]
+class MyBot(commands.Bot):
+    async def setup_hook(self):
+        initial_extensions = [
+            'cogs.admin',
+            'cogs.fun',
+            'cogs.info',
+            'cogs.moderation',
+            'cogs.welcome'
+        ]
+        for extension in initial_extensions:
+            await self.load_extension(extension)
 
-if __name__ == '__main__':
-    for extension in initial_extensions:
-        bot.load_extension(extension)
+# Initialize bot with intents
+bot = MyBot(command_prefix=PREFIX, intents=intents)
 
 @bot.event
 async def on_ready():
