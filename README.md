@@ -47,7 +47,7 @@ Create a `config.json` file in the data directory:
 
 4. Set Environment Variables:
 
-Create a `.env` file in the root directory with the following content:
+  Create a `.env` file in the root directory with the following content:
 
   ```dotenv
   DISCORD_BOT_TOKEN=your_bot_token_here
@@ -97,7 +97,7 @@ Create a `.env` file in the root directory with the following content:
 docker-compose up -d
 ```
 
-### GitHub Actions and Docker Hub
+## GitHub Actions and Docker Hub
 
 1. Set Up GitHub Secrets:
 
