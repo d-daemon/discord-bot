@@ -5,8 +5,9 @@ class Info(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command()
-    async def userinfo(self, ctx, member: discord.Member):
+    @commands.command(name='userinfo', help='Displays information about a user.')
+    async def userinfo(self, ctx, member: discord.Member = None):
+        member = member or ctx.author  # If no member is specified, show info about the message author
         embed = discord.Embed(title=f'User Info - {member}', color=discord.Color.blue())
         embed.add_field(name='ID', value=member.id, inline=True)
         embed.add_field(name='Name', value=member.display_name, inline=True)

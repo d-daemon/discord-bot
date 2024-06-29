@@ -1,3 +1,6 @@
 {
-    "prefix": "!"
+    "prefix": "??",
+    "welcome_channel": "general",
+    "goodbye_channel": "general",
+    "videoddownload_channel": "warmind"
 }
