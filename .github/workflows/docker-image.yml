@@ -3,7 +3,7 @@ name: Docker Dev
 on:
   push:
     branches:
-      - dev
+      - Balthazar
 
 jobs:
   build:
