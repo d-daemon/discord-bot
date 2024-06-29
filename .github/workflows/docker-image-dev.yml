@@ -3,7 +3,7 @@ name: Build and Push Docker Image for Dev
 on:
   push:
     branches:
-      - dev
+      - Balthazar
 
 jobs:
   build:
