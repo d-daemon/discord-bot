@@ -1,20 +1,15 @@
-FROM python:3.9-slim
+FROM python:3.9
 
 # Set work directory
 WORKDIR /app
 
-# Copy application files
-COPY ./cogs /app/cogs
-COPY ./data /app/data
-COPY ./utils /app/utils
-COPY bot.py /app/
-COPY requirements.txt /app/
+COPY requirements.txt requirements.txt
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1
+# Copy application files
+COPY . .
 
 # Run the bot
 CMD ["python", "bot.py"]
