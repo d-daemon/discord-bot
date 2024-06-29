@@ -50,7 +50,7 @@ if __name__ == "__main__":
     intents.presences = False
     intents.typing = False
 
-    with open('data/config.json') as config_file:
+    with open('config/config.json') as config_file:
         config = json.load(config_file)
 
     TOKEN = os.getenv('DISCORD_BOT_TOKEN')
