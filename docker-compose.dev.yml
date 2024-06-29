@@ -24,7 +24,9 @@ services:
       - DISCORD_BOT_TOKEN=${DEV_DISCORD_BOT_TOKEN}
       - DATABASE_URL=${DEV_DATABASE_URL}
     volumes:
+      - /volume1/docker/discord-bot/dev/discord-bot/cogs:/app/cogs
       - /volume1/docker/discord-bot/dev/discord-bot/data:/app/data
+      - /volume1/docker/discord-bot/dev/discord-bot/utils:/app/utils
     restart: "no"
     networks:
       - discord-bot-net
