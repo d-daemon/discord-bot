@@ -3,7 +3,6 @@ FROM python:3.9-slim
 LABEL image="https://hub.docker.com/r/hhxcusco/discord-bot"
 LABEL source="https://github.com/d-daemon/discord-bot"
 
-RUN apt-get install -y ffmpeg git curl
 COPY requirements.txt ./
 RUN pip install -U pip
 
