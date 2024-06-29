@@ -16,7 +16,9 @@ services:
       - discord-bot-net
 
   discord-bot-dev:
-    image: hhxcusco/discord-bot:dev
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: discord-bot-dev
     ports:
       - "26219:5000"
@@ -24,7 +26,8 @@ services:
       - DISCORD_BOT_TOKEN=${DEV_DISCORD_BOT_TOKEN}
       - DATABASE_URL=${DEV_DATABASE_URL}
     volumes:
-      - /volume1/docker/discord-bot/dev:/app
+      - /volume1/docker/discord-bot/dev/discord-bot/config:/var/app/config
+      - /volume1/docker/discord-bot/dev/discord-bot/data:/var/app/data
     restart: "no"
     networks:
       - discord-bot-net
