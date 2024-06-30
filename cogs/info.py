@@ -13,7 +13,7 @@ class Info(commands.Cog):
         embed.add_field(name='Name', value=member.display_name, inline=True)
         embed.add_field(name='Created At', value=member.created_at.strftime('%Y-%m-%d %H:%M:%S'), inline=True)
         embed.add_field(name='Joined At', value=member.joined_at.strftime('%Y-%m-%d %H:%M:%S'), inline=True)
-        embed.set_thumbnail(url=member.avatar_url)
+        embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
         await ctx.send(embed=embed)
 
 async def setup(bot):

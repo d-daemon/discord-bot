@@ -1,13 +1,9 @@
 # Use an official Python runtime as a parent image
 FROM python:3.9-slim
+
+# Metadata
 LABEL image="https://hub.docker.com/r/hhxcusco/discord-bot"
 LABEL source="https://github.com/d-daemon/discord-bot"
-
-COPY requirements.txt ./
-RUN pip install -U pip
-
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
@@ -15,23 +11,19 @@ ENV PYTHONUNBUFFERED=1
 # Create a working directory
 WORKDIR /app
 
+# Install dependencies
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
 # Copy the current directory contents into the container at /app
-COPY ./cogs cogs
-COPY ./data data
-COPY ./utils utils
-COPY ./config config
-COPY bot.py LICENSE ./
+COPY . .
 
-# Expose port 5000 to the outside world
-EXPOSE 5000
+# Copy and prepare the entrypoint script from the docker directory
+COPY docker/docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Define the volume mount points
-VOLUME ["/app/config", "/app/data"]
+# Define the entrypoint to initialize the container environment
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
-# Copy entrypoint script and make it executable
-COPY docker/docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
-
-# Define the entrypoint and default command
-ENTRYPOINT ["/docker-entrypoint.sh"]
+# Set the default command to run when starting the container
 CMD ["python", "bot.py"]

@@ -1,34 +1,34 @@
-version: '3'
+version: '3.8'
 services:
   postgresql:
     image: postgres:latest
     container_name: postgresql-dev
     environment:
-      POSTGRES_DB: ${DEV_POSTGRES_DB}
-      POSTGRES_USER: ${DEV_POSTGRES_USER}
-      POSTGRES_PASSWORD: ${DEV_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - /volume1/docker/postgresql/data:/var/lib/postgresql/data
+      - ./postgresql/data:/var/lib/postgresql/data
     ports:
       - "5433:5432"
     restart: "no"
     networks:
       - discord-bot-net
 
-  discord-bot-dev:
+  discord-bot:
     build:
       context: .
-      dockerfile: Dockerfile
+    image: discord-bot:dev
     container_name: discord-bot-dev
     ports:
       - "26219:5000"
     environment:
-      - DISCORD_BOT_TOKEN=${DEV_DISCORD_BOT_TOKEN}
-      - DATABASE_URL=${DEV_DATABASE_URL}
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
+      DATABASE_URL: ${DATABASE_URL}
     volumes:
-      - /volume1/docker/discord-bot/dev/discord-bot/config:/var/app/config
-      - /volume1/docker/discord-bot/dev/discord-bot/data:/var/app/data
-    restart: "no"
+      - ./config:/app/config
+      - ./data:/app/data
+    restart: unless-stopped
     networks:
       - discord-bot-net
 

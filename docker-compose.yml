@@ -1,12 +1,37 @@
-version: '3'
+version: '3.8'
 services:
+  postgresql:
+    image: postgres:latest
+    container_name: discord-bot-postgresql
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./postgresql/data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    restart: "no"
+    networks:
+      - discord-bot-net
+
   discord-bot:
-    image: hhxcusco/discord-bot:latest
+    build:
+      context: .
+    image: discord-bot:latest
     container_name: discord-bot
     ports:
-      - "26218:5000"  # Map port 26218 on the host to port 5000 in the container
+      - "26219:5000"
     environment:
-      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}  # Use the environment variable
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
+      DATABASE_URL: ${DATABASE_URL}
     volumes:
-      - /volume1/docker/discord-bot/config:/app/data  # Persistent data storage
-    restart: always  # Always restart the container if it stops
+      - ./config:/app/config
+      - ./data:/app/data
+    restart: unless-stopped
+    networks:
+      - discord-bot-net
+
+networks:
+  discord-bot-net:
+    driver: bridge

@@ -5,6 +5,7 @@ import os
 from pytube import YouTube
 from yt_dlp import YoutubeDL
 import logging
+import json
 
 def unique_filename(directory, filename):
     base, ext = os.path.splitext(filename)
@@ -15,18 +16,19 @@ def unique_filename(directory, filename):
         counter += 1
     return unique_name
 
+def load_config():
+    with open('/app/config/config.json', 'r') as config_file:
+        return json.load(config_file)
+
 def download_instagram_video(post_url, download_dir):
     L = instaloader.Instaloader(dirname_pattern=download_dir, filename_pattern="{shortcode}", save_metadata=False)
     L.download_comments = False
-
     shortcode = post_url.split('/')[-2]
     post = instaloader.Post.from_shortcode(L.context, shortcode)
     L.download_post(post, target=download_dir)
-
     video_files = [f for f in os.listdir(download_dir) if f.endswith('.mp4')]
     if not video_files:
         raise FileNotFoundError("No video file found in the downloaded files!")
-
     video_path = os.path.join(download_dir, video_files[0])
     return video_path
 
@@ -37,10 +39,7 @@ def download_youtube_video(video_url, download_dir):
     return output_path
 
 def download_with_ytdlp(video_url, download_dir):
-    ydl_opts = {
-        'outtmpl': os.path.join(download_dir, '%(title)s.%(ext)s'),
-        'format': 'bestvideo+bestaudio/best'
-    }
+    ydl_opts = {'outtmpl': os.path.join(download_dir, '%(title)s.%(ext)s'), 'format': 'bestvideo+bestaudio/best'}
     with YoutubeDL(ydl_opts) as ydl:
         info_dict = ydl.extract_info(video_url, download=True)
         video_filename = ydl.prepare_filename(info_dict)
@@ -49,13 +48,13 @@ def download_with_ytdlp(video_url, download_dir):
 class VDL(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.config = bot.config
+        self.config = load_config()
         self.download_dir = "/app/data/VDL-Output"
         if not os.path.exists(self.download_dir):
             os.makedirs(self.download_dir)
 
-    @commands.command(name="vdl", help="Download a video from a URL. Usage: ??vdl [platform] [url]")
-    async def download_video(self, ctx, platform: str, url: str):
+    @commands.command(name="vdl", help="Download a video from a URL. Example: !vdl [platform] [url]")
+    async def video_download(self, ctx, platform: str, url: str):
         """Download video using a prefix command."""
         platform = platform.lower()
         try:
@@ -66,7 +65,7 @@ class VDL(commands.Cog):
             else:
                 video_path = download_with_ytdlp(url, self.download_dir)
 
-            channel_name = self.config['videoddownload_channel']
+            channel_name = self.config.get('videodownload_channel', 'general')
             channel = discord.utils.get(ctx.guild.text_channels, name=channel_name)
             file = discord.File(video_path, filename=os.path.basename(video_path))
             if channel:
