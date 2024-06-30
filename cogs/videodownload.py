@@ -65,7 +65,7 @@ class VideoDownload(commands.Cog):
             records = await connection.fetch("SELECT guild_id FROM guilds")
             return [record['guild_id'] for record in records]
 
-    @app_commands.command(name="video _download", description="Download a video from various platforms")
+    @app_commands.command(name="video_download", description="Download a video from various platforms")
     @app_commands.describe(platform="Platform to download video from", url="URL of the video")
     @app_commands.choices(platform=[
         app_commands.Choice(name='Instagram', value='instagram'),
