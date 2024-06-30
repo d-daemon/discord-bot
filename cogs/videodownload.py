@@ -96,6 +96,4 @@ class VideoDownload(commands.Cog):
             await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
 
 async def setup(bot):
-    cog = VideoDownload(bot)
-    await cog.setup()
-    await bot.add_cog(cog)
+    await bot.add_cog(VideoDownload(bot))
