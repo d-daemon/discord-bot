@@ -31,9 +31,9 @@ jobs:
 
       - name: Deploy
         env:
-          DISCORD_BOT_TOKEN: ${{ secrets.DEV_DISCORD_BOT_TOKEN }}
-          DATABASE_URL: ${{ secrets.DEV_DATABASE_URL }}
-          DEV_POSTGRES_USER: ${{ secrets.DEV_POSTGRES_USER }}
-          DEV_POSTGRES_PASSWORD: ${{ secrets.DEV_POSTGRES_PASSWORD }}
-          DEV_POSTGRES_DB: ${{ secrets.DEV_POSTGRES_DB }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DEV_POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          DEV_POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          DEV_POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
         run: docker-compose -f docker-compose.yml up -d
