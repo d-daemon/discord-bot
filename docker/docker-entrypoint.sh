@@ -11,8 +11,7 @@ if [ ! -f /app/config/config.json ]; then
 {
     "prefix": "!",
     "welcome_channel": "general",
-    "goodbye_channel": "general",
-    "videodownload_channel": "general"
+    "goodbye_channel": "general"
 }
 EOF
 fi
