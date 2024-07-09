@@ -2,7 +2,7 @@ version: '3.8'
 services:
   postgresql:
     image: postgres:latest
-    container_name: postgresql-dev
+    container_name: postgresql-elly
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -18,10 +18,10 @@ services:
   discord-bot:
     build:
       context: .
-    image: discord-bot:dev
-    container_name: discord-bot-dev
+    image: discord-bot:latest
+    container_name: discord-bot-elly
     ports:
-      - "26219:5000"
+      - "26218:5000"
     environment:
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
       DATABASE_URL: ${DATABASE_URL}
