@@ -42,41 +42,41 @@ A Discord bot built using `discord.py` for various functionalities such as moder
 
 2. Install Dependencies:
 
-  ```bash
-  pip install -r requirements.txt
-  ```
+     ```bash
+     pip install -r requirements.txt
+     ```
 
 3. Set Environment Variables:
 
-  Create a `.env` file in the root directory with the following content:
+     Create a `.env` file in the root directory with the following content:
 
-  ```dotenv
-  DISCORD_BOT_TOKEN={DISCORD_BOT_TOKEN}
-  DATABASE_URL=postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@postgresql:5432/{POSTGRES_DB}
-  POSTGRES_USER={POSTGRES_USER}
-  POSTGRES_PASSWORD={POSTGRES_PASSWORD}
-  POSTGRES_DB={POSTGRES_DB}
-  ```
+     ```dotenv
+     DISCORD_BOT_TOKEN={DISCORD_BOT_TOKEN}
+     DATABASE_URL=postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@postgresql:5432/{POSTGRES_DB}
+     POSTGRES_USER={POSTGRES_USER}
+     POSTGRES_PASSWORD={POSTGRES_PASSWORD}
+     POSTGRES_DB={POSTGRES_DB}
+      ```        
 
 ### GitHub Actions and Docker Hub
 
 1. Set Up GitHub Secrets:
 
-Go to your repository on GitHub and add the following secrets:
-
-  - `DOCKER_USERNAME`: Your Docker Hub username.
-  - `DOCKER_PASSWORD`: Your Docker Hub password.
-  - `DISCORD_BOT_TOKEN`: Your Discord bot token.
-  - `DATABASE_URL`: Your PostgreSQL database url.
-  - `POSTGRES_USER`: Your PostgreSQL username.
-  - `POSTGRES_PASS`: Your PostgreSQL password.
-  - `POSTGRES_DB`: Your PostgreSQL database name.
+   Go to your repository on GitHub and add the following secrets:
+   
+     - `DOCKER_USERNAME`: Your Docker Hub username.
+     - `DOCKER_PASSWORD`: Your Docker Hub password.
+     - `DISCORD_BOT_TOKEN`: Your Discord bot token.
+     - `DATABASE_URL`: Your PostgreSQL database url.
+     - `POSTGRES_USER`: Your PostgreSQL username.
+     - `POSTGRES_PASS`: Your PostgreSQL password.
+     - `POSTGRES_DB`: Your PostgreSQL database name.
 
 2. Create a GitHub Actions Workflow:
 
-Create a file named `docker-image.yml` in the `.github/workflows` directory with the following content. 
-
-  ```yaml
+   Create a file named `docker-image.yml` in the `.github/workflows` directory with the following content. 
+   
+     ```yaml
    name: Docker Elly
    
    on:
@@ -116,13 +116,13 @@ Create a file named `docker-image.yml` in the `.github/workflows` directory with
              DEV_POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
              DEV_POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
            run: docker-compose -f docker-compose.yml up -d
-  ```
-
+     ```
+   
 ### Docker Compose
-
+   
 1. Create a `docker-compose.yml` File:
-
-  ```yaml
+   
+     ```yaml
    version: '3.8'
    
    services:
@@ -159,29 +159,29 @@ Create a file named `docker-image.yml` in the `.github/workflows` directory with
    networks:
      discord-bot-net:
        driver: bridge
-  ```
+     ```
 
 2. Build the Docker Image:
 
-  ```bash
-  docker build -t discord-bot .
-  ```
+      ```bash
+      docker build -t discord-bot .
+      ```
 
 3. Deploy with Docker Compose:
 
-  ```bash
-  docker-compose up -d --build
-  ```
+     ```bash
+     docker-compose up -d --build
+     ```
+
 4. Update the config.json in the `config` folder:
 
-   ```json
-   {
-    "prefix": "!",
-    "welcome_channel": "town-square",
-    "goodbye_channel": "town-square"
-   }
-   
-   ```
+      ```json
+      {
+       "prefix": "!",
+       "welcome_channel": "town-square",
+       "goodbye_channel": "town-square"
+      }
+      ```
 
 5. Restart the container for the changes to take effect. 
 
