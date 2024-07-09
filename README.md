@@ -77,45 +77,45 @@ Go to your repository on GitHub and add the following secrets:
 Create a file named `docker-image.yml` in the `.github/workflows` directory with the following content. 
 
   ```yaml
-name: Docker Elly
-
-on:
-  push:
-    branches:
-      - master
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v1
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v2
-        with:
-          context: .
-          push: true
-          tags: hhxcusco/discord-bot:latest
-
-      - name: Deploy
-        env:
-          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DEV_POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-          DEV_POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          DEV_POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-        run: docker-compose -f docker-compose.yml up -d
+   name: Docker Elly
+   
+   on:
+     push:
+       branches:
+         - master
+   
+   jobs:
+     build:
+       runs-on: ubuntu-latest
+   
+       steps:
+         - name: Checkout code
+           uses: actions/checkout@v2
+   
+         - name: Set up Docker Buildx
+           uses: docker/setup-buildx-action@v1
+   
+         - name: Log in to Docker Hub
+           uses: docker/login-action@v1
+           with:
+             username: ${{ secrets.DOCKER_USERNAME }}
+             password: ${{ secrets.DOCKER_PASSWORD }}
+   
+         - name: Build and push Docker image
+           uses: docker/build-push-action@v2
+           with:
+             context: .
+             push: true
+             tags: hhxcusco/discord-bot:latest
+   
+         - name: Deploy
+           env:
+             DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+             DATABASE_URL: ${{ secrets.DATABASE_URL }}
+             DEV_POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+             DEV_POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+             DEV_POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+           run: docker-compose -f docker-compose.yml up -d
   ```
 
 ### Docker Compose
@@ -123,42 +123,42 @@ jobs:
 1. Create a `docker-compose.yml` File:
 
   ```yaml
-version: '3.8'
-
-services:
-  postgresql:
-    image: postgres:latest
-    container_name: postgresql
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - /volume1/docker/postgresql/data:/var/lib/postgresql/data
-    ports:
-      - "5433:5432"
-    restart: "no"
-    networks:
-      - discord-bot-net
-
-  discord-bot:
-    image: hhxcusco/discord-bot:latest
-    container_name: discord-bot
-    ports:
-      - "26218:5000"
-    environment:
-      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
-      - DATABASE_URL=${DATABASE_URL}
-    volumes:
-      - /volume1/docker/discord-bot/config:/app/config
-      - /volume1/docker/discord-bot/data:/app/data
-    restart: unless-stopped
-    networks:
-      - discord-bot-net
-
-networks:
-  discord-bot-net:
-    driver: bridge
+   version: '3.8'
+   
+   services:
+     postgresql:
+       image: postgres:latest
+       container_name: postgresql
+       environment:
+         POSTGRES_DB: ${POSTGRES_DB}
+         POSTGRES_USER: ${POSTGRES_USER}
+         POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+       volumes:
+         - /volume1/docker/postgresql/data:/var/lib/postgresql/data
+       ports:
+         - "5433:5432"
+       restart: "no"
+       networks:
+         - discord-bot-net
+   
+     discord-bot:
+       image: hhxcusco/discord-bot:latest
+       container_name: discord-bot
+       ports:
+         - "26218:5000"
+       environment:
+         - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+         - DATABASE_URL=${DATABASE_URL}
+       volumes:
+         - /volume1/docker/discord-bot/config:/app/config
+         - /volume1/docker/discord-bot/data:/app/data
+       restart: unless-stopped
+       networks:
+         - discord-bot-net
+   
+   networks:
+     discord-bot-net:
+       driver: bridge
   ```
 
 2. Build the Docker Image:
