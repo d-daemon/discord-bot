@@ -19,7 +19,7 @@ A Discord bot built using `discord.py` for various functionalities such as moder
 - **Role Management**: Add or remove roles from users.
 - **Fun Commands**: Commands like dice rolling and jokes.
 - **Informational Commands**: Commands to fetch user information.
-- **Video Download Commands: Download videos from various platforms including Instagram, YouTube, TikTok, Facebook, and more.
+- **Video Download Commands**: Download videos from various platforms including Instagram, YouTube, TikTok, Facebook, and more.
 
 ## Setup Instructions
 
