@@ -1,9 +1,9 @@
-name: Docker
+name: Docker Elly
 
 on:
   push:
     branches:
-      - Balthazar
+      - master
 
 jobs:
   build:
@@ -27,7 +27,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: hhxcusco/discord-bot:dev
+          tags: hhxcusco/discord-bot:latest
 
       - name: Deploy
         env:
@@ -36,4 +36,4 @@ jobs:
           DEV_POSTGRES_USER: ${{ secrets.DEV_POSTGRES_USER }}
           DEV_POSTGRES_PASSWORD: ${{ secrets.DEV_POSTGRES_PASSWORD }}
           DEV_POSTGRES_DB: ${{ secrets.DEV_POSTGRES_DB }}
-        run: docker-compose -f docker-compose.dev.yml up -d
+        run: docker-compose -f docker-compose.yml up -d
