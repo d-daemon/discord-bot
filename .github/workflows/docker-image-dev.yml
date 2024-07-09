@@ -1,4 +1,4 @@
-name: Docker Balthazar
+name: Docker
 
 on:
   push:
