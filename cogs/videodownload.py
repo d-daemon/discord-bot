@@ -46,6 +46,20 @@ def download_with_ytdlp(video_url, download_dir):
         video_filename = ydl.prepare_filename(info_dict)
     return video_filename
 
+def download_tiktok_video(video_url, download_dir):
+    ydl_opts = {'outtmpl': os.path.join(download_dir, '%(title)s.%(ext)s'), 'format': 'best'}
+    with YoutubeDL(ydl_opts) as ydl:
+        info_dict = ydl.extract_info(video_url, download=True)
+        video_filename = ydl.prepare_filename(info_dict)
+    return video_filename
+
+def download_facebook_reel(video_url, download_dir):
+    ydl_opts = {'outtmpl': os.path.join(download_dir, '%(title)s.%(ext)s'), 'format': 'best'}
+    with YoutubeDL(ydl_opts) as ydl:
+        info_dict = ydl.extract_info(video_url, download=True)
+        video_filename = ydl.prepare_filename(info_dict)
+    return video_filename
+
 class VideoDownload(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -65,14 +79,16 @@ class VideoDownload(commands.Cog):
             records = await connection.fetch("SELECT guild_id FROM guilds")
             return [record['guild_id'] for record in records]
 
-    @app_commands.command(name="video_download", description="Download a video from various platforms")
+    @app_commands.command(name="video_dl", description="Download a video from various platforms")
     @app_commands.describe(platform="Platform to download video from", url="URL of the video")
     @app_commands.choices(platform=[
-        app_commands.Choice(name='Instagram', value='instagram'),
-        app_commands.Choice(name='YouTube', value='youtube'),
-        app_commands.Choice(name='Twitter', value='twitter'),
         app_commands.Choice(name='Facebook', value='facebook'),
-        app_commands.Choice(name='Vimeo', value='vimeo')])
+        app_commands.Choice(name='Facebook Reels', value='facebook_reels'),
+        app_commands.Choice(name='Instagram', value='instagram'),
+        app_commands.Choice(name='TikTok', value='tiktok'),
+        app_commands.Choice(name='Twitter', value='twitter'),
+        app_commands.Choice(name='Vimeo', value='vimeo'),
+        app_commands.Choice(name='YouTube', value='youtube')])
     async def download_video(self, interaction: discord.Interaction, platform: app_commands.Choice[str], url: str):
         await interaction.response.defer(ephemeral=True)
         try:
@@ -80,20 +96,37 @@ class VideoDownload(commands.Cog):
                 video_path = download_instagram_video(url, self.download_dir)
             elif platform.value == 'youtube':
                 video_path = download_youtube_video(url, self.download_dir)
+            elif platform.value == 'tiktok':
+                video_path = download_tiktok_video(url, self.download_dir)
+            elif platform.value == 'facebook_reels':
+                video_path = download_facebook_reel(url, self.download_dir)
             else:
                 video_path = download_with_ytdlp(url, self.download_dir)
-            
+
+            # Check file size
+            file_size = os.path.getsize(video_path)
+            if file_size > 25 * 1024 * 1024:  # 25 MB limit
+                os.remove(video_path)
+                await interaction.followup.send("The downloaded video exceeds the 25 MB size limit.", ephemeral=True)
+                return
+
             self.config = load_config()
-            channel_name = self.config.get('videodownload_channel', 'general')
-            channel = discord.utils.get(interaction.guild.text_channels, name=channel_name)
             file = discord.File(video_path, filename=os.path.basename(video_path))
-            if channel:
-                await channel.send("Here is your downloaded video:", file=file)
+            await interaction.channel.send("Here is your downloaded video:", file=file)
             os.remove(video_path)
-            await interaction.followup.send(f"The video has been sent to the '{channel_name}' channel.", ephemeral=True)
+
+            # Remove all other files
+            for f in os.listdir(self.download_dir):
+                file_path = os.path.join(self.download_dir, f)
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+
+            await interaction.followup.send(f"The video has been sent to the '{interaction.channel.name}' channel.", ephemeral=True)
         except Exception as e:
             logging.exception("Failed to download or send the video")
             await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
 
 async def setup(bot):
-    await bot.add_cog(VideoDownload(bot))
+    cog = VideoDownload(bot)
+    await cog.setup()
+    await bot.add_cog(cog)
