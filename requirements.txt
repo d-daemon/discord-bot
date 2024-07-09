@@ -1,2 +1,5 @@
 discord.py
-aiohttp
+instaloader
+pytube
+yt-dlp
+asyncpg

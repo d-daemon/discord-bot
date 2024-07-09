@@ -1,9 +1,9 @@
-name: Docker Elly
+name: Docker
 
 on:
   push:
     branches:
-      - master
+      - Balthazar
 
 jobs:
   build:
@@ -25,12 +25,15 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v2
         with:
-          context: .  # Ensure this is the correct context for your Dockerfile
-          file: ./Dockerfile  # Ensure this points to your Dockerfile
+          context: .
           push: true
-          tags: hhxcusco/discord-bot:latest
+          tags: hhxcusco/discord-bot:dev
 
       - name: Deploy
         env:
-          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-        run: docker run -d --name discord-bot -e DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }} -p 26218:5000 hhxcusco/discord-bot:latest
+          DISCORD_BOT_TOKEN: ${{ secrets.DEV_DISCORD_BOT_TOKEN }}
+          DATABASE_URL: ${{ secrets.DEV_DATABASE_URL }}
+          DEV_POSTGRES_USER: ${{ secrets.DEV_POSTGRES_USER }}
+          DEV_POSTGRES_PASSWORD: ${{ secrets.DEV_POSTGRES_PASSWORD }}
+          DEV_POSTGRES_DB: ${{ secrets.DEV_POSTGRES_DB }}
+        run: docker-compose -f docker-compose.dev.yml up -d
