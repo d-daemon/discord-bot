@@ -5,6 +5,7 @@ import instaloader
 import os
 import logging
 from datetime import datetime
+import json
 
 def unique_filename(directory, base_name, index):
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -57,7 +58,6 @@ class PhotoDownload(commands.Cog):
     async def download_photo(self, interaction: discord.Interaction, url: str):
         await interaction.response.defer(ephemeral=True)
         
-        # Log the user's request
         logging.info(f"{interaction.user} requested to download a photo from Instagram with URL: {url}")
         
         try:
@@ -66,34 +66,56 @@ class PhotoDownload(commands.Cog):
             if len(photo_paths) == 1:
                 selected_photos = [photo_paths[0]]
             else:
-                # Let the user select which images to download
                 options = [
                     discord.SelectOption(label=f"Image {i+1}", value=str(i))
                     for i in range(len(photo_paths))
                 ]
 
                 class MultiPhotoSelect(discord.ui.Select):
-                    def __init__(self):
+                    def __init__(self, download_dir):
+                        self.download_dir = download_dir
                         super().__init__(placeholder="Choose images to download", min_values=1, max_values=len(options), options=options)
 
                     async def callback(self, select_interaction: discord.Interaction):
                         selected_indexes = [int(i) for i in self.values]
                         selected_photos = [photo_paths[i] for i in selected_indexes]
 
+                        files = []
                         for photo in selected_photos:
-                            file = discord.File(photo, filename=os.path.basename(photo))
-                            await select_interaction.channel.send(f"{interaction.user.mention} Here is one of your selected photos:", file=file)
+                            files.append(discord.File(photo, filename=os.path.basename(photo)))
+
+                        await select_interaction.channel.send(f"{interaction.user.mention} Here are your selected photos:", files=files)
+
+                        # Dismiss the interaction
+                        await select_interaction.response.defer()
+
+                        # Delete the original message with the dropdown
+                        await interaction.delete_original_response()
 
                         # Clean up after sending
                         for f in os.listdir(self.download_dir):
                             file_path = os.path.join(self.download_dir, f)
                             if os.path.isfile(file_path):
                                 os.remove(file_path)
-                        
-                        await select_interaction.followup.send(f"The photos have been sent to the '{select_interaction.channel.name}' channel.", ephemeral=True)
 
-                view = discord.ui.View()
-                view.add_item(MultiPhotoSelect())
+                view = discord.ui.View(timeout=30)  # Set the timeout to 30 seconds
+                view.add_item(MultiPhotoSelect(self.download_dir))
+
+                async def on_timeout():
+                    # If timeout occurs, send all photos
+                    files = [discord.File(photo, filename=os.path.basename(photo)) for photo in photo_paths]
+                    await interaction.channel.send(f"{interaction.user.mention} You did not respond in time, so here are all the photos:", files=files)
+
+                    # Clean up after sending
+                    for f in os.listdir(self.download_dir):
+                        file_path = os.path.join(self.download_dir, f)
+                        if os.path.isfile(file_path):
+                            os.remove(file_path)
+
+                    # Delete the original message with the dropdown
+                    await interaction.delete_original_response()
+
+                view.on_timeout = on_timeout
                 await interaction.followup.send("Please select the photos you want to download:", view=view)
                 return
 
@@ -108,7 +130,6 @@ class PhotoDownload(commands.Cog):
                 if os.path.isfile(file_path):
                     os.remove(file_path)
 
-            await interaction.followup.send(f"The photos have been sent to the '{interaction.channel.name}' channel.", ephemeral=True)
         except Exception as e:
             logging.exception("Failed to download or send the photo")
             await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
