@@ -99,6 +99,7 @@ class VideoDownload(commands.Cog):
         app_commands.Choice(name='YouTube Shorts', value='youtube_short')])
     async def download_video(self, interaction: discord.Interaction, platform: app_commands.Choice[str], url: str):
         await interaction.response.defer(ephemeral=True)
+        logging.info(f"{interaction.user} requested to download a video from {platform.name} with URL: {url}")
         try:
             if platform.value == 'instagram':
                 video_path = download_instagram_video(url, self.download_dir)
@@ -122,7 +123,7 @@ class VideoDownload(commands.Cog):
 
             self.config = load_config()
             file = discord.File(video_path, filename=os.path.basename(video_path))
-            await interaction.channel.send("Here is your downloaded video:", file=file)
+            await interaction.channel.send(f"{interaction.user.mention} Here is your downloaded video:", file=file)
             os.remove(video_path)
 
             # Remove all other files
