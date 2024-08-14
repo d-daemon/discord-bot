@@ -7,15 +7,11 @@ from pytube import YouTube
 from yt_dlp import YoutubeDL
 import logging
 import json
+from datetime import datetime
 
-def unique_filename(directory, filename):
-    base, ext = os.path.splitext(filename)
-    counter = 1
-    unique_name = filename
-    while os.path.exists(os.path.join(directory, unique_name)):
-        unique_name = f"{base}_{counter}{ext}"
-        counter += 1
-    return unique_name
+def unique_filename(directory):
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return os.path.join(directory, f"{current_time}.mp4")
 
 def load_config():
     with open('/app/config/config.json', 'r') as config_file:
@@ -31,34 +27,45 @@ def download_instagram_video(post_url, download_dir):
     if not video_files:
         raise FileNotFoundError("No video file found in the downloaded files!")
     video_path = os.path.join(download_dir, video_files[0])
-    return video_path
+    new_video_path = unique_filename(download_dir)
+    os.rename(video_path, new_video_path)
+    return new_video_path
 
 def download_youtube_video(video_url, download_dir):
     yt = YouTube(video_url)
     stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
     output_path = stream.download(output_path=download_dir)
-    return output_path
+    new_video_path = unique_filename(download_dir)
+    os.rename(output_path, new_video_path)
+    return new_video_path
 
 def download_with_ytdlp(video_url, download_dir):
-    ydl_opts = {'outtmpl': os.path.join(download_dir, '%(title)s.%(ext)s'), 'format': 'bestvideo+bestaudio/best'}
+    output_template = unique_filename(download_dir)
+    ydl_opts = {'outtmpl': output_template, 'format': 'bestvideo+bestaudio/best'}
     with YoutubeDL(ydl_opts) as ydl:
-        info_dict = ydl.extract_info(video_url, download=True)
-        video_filename = ydl.prepare_filename(info_dict)
-    return video_filename
+        ydl.extract_info(video_url, download=True)
+    return output_template
 
 def download_tiktok_video(video_url, download_dir):
-    ydl_opts = {'outtmpl': os.path.join(download_dir, '%(title)s.%(ext)s'), 'format': 'best'}
+    output_template = unique_filename(download_dir)
+    ydl_opts = {'outtmpl': output_template, 'format': 'best'}
     with YoutubeDL(ydl_opts) as ydl:
-        info_dict = ydl.extract_info(video_url, download=True)
-        video_filename = ydl.prepare_filename(info_dict)
-    return video_filename
+        ydl.extract_info(video_url, download=True)
+    return output_template
 
 def download_facebook_reel(video_url, download_dir):
-    ydl_opts = {'outtmpl': os.path.join(download_dir, '%(title)s.%(ext)s'), 'format': 'best'}
+    output_template = unique_filename(download_dir)
+    ydl_opts = {'outtmpl': output_template, 'format': 'best'}
     with YoutubeDL(ydl_opts) as ydl:
-        info_dict = ydl.extract_info(video_url, download=True)
-        video_filename = ydl.prepare_filename(info_dict)
-    return video_filename
+        ydl.extract_info(video_url, download=True)
+    return output_template
+
+def download_youtube_short(video_url, download_dir):
+    output_template = unique_filename(download_dir)
+    ydl_opts = {'outtmpl': output_template, 'format': 'best'}
+    with YoutubeDL(ydl_opts) as ydl:
+        ydl.extract_info(video_url, download=True)
+    return output_template
 
 class VideoDownload(commands.Cog):
     def __init__(self, bot):
@@ -88,7 +95,8 @@ class VideoDownload(commands.Cog):
         app_commands.Choice(name='TikTok', value='tiktok'),
         app_commands.Choice(name='Twitter', value='twitter'),
         app_commands.Choice(name='Vimeo', value='vimeo'),
-        app_commands.Choice(name='YouTube', value='youtube')])
+        app_commands.Choice(name='YouTube', value='youtube'),
+        app_commands.Choice(name='YouTube Shorts', value='youtube_short')])
     async def download_video(self, interaction: discord.Interaction, platform: app_commands.Choice[str], url: str):
         await interaction.response.defer(ephemeral=True)
         try:
@@ -100,6 +108,8 @@ class VideoDownload(commands.Cog):
                 video_path = download_tiktok_video(url, self.download_dir)
             elif platform.value == 'facebook_reels':
                 video_path = download_facebook_reel(url, self.download_dir)
+            elif platform.value == 'youtube_short':
+                video_path = download_youtube_short(url, self.download_dir)
             else:
                 video_path = download_with_ytdlp(url, self.download_dir)
 
