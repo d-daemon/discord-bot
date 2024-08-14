@@ -52,7 +52,7 @@ class PhotoDownload(commands.Cog):
             records = await connection.fetch("SELECT guild_id FROM guilds")
             return [record['guild_id'] for record in records]
 
-    @app_commands.command(name="IG_photo", description="Download a photo from Instagram")
+    @app_commands.command(name="ig_photo", description="Download a photo from Instagram")
     @app_commands.describe(url="URL of the Instagram post")
     async def download_photo(self, interaction: discord.Interaction, url: str):
         await interaction.response.defer(ephemeral=True)
