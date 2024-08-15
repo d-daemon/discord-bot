@@ -4,6 +4,8 @@ import discord
 from discord.ext import commands
 import asyncpg
 import logging
+import io
+import base64
 
 logging.basicConfig(level=logging.INFO)
 
@@ -22,6 +24,9 @@ class MyBot(commands.Bot):
         # Connect to the database
         self.db_pool = await self.create_db_pool()
 
+        # Recreate the bot_settings table
+        await self.recreate_bot_settings_table()
+
         # Load cogs, skipping __init__.py or other non-cog files
         for filename in os.listdir('./cogs'):
             if filename.endswith('.py') and filename != '__init__.py':
@@ -34,6 +39,9 @@ class MyBot(commands.Bot):
 
         # Sync commands globally and per guild
         await self.sync_commands()
+
+        # Apply saved personalization settings
+        await self.apply_personalization_settings()
 
     async def create_db_pool(self):
         try:
@@ -50,6 +58,22 @@ class MyBot(commands.Bot):
             logging.error(f"Error connecting to the database: {str(e)}")
             return None
 
+    async def recreate_bot_settings_table(self):
+        try:
+            async with self.db_pool.acquire() as conn:
+                await conn.execute("DROP TABLE IF EXISTS bot_settings")
+                await conn.execute('''
+                    CREATE TABLE bot_settings (
+                        key TEXT NOT NULL,
+                        value TEXT,
+                        guild_id BIGINT NOT NULL,
+                        PRIMARY KEY (key, guild_id)
+                    )
+                ''')
+            logging.info("bot_settings table recreated successfully")
+        except Exception as e:
+            logging.error(f"Error recreating bot_settings table: {str(e)}")
+
     async def sync_commands(self):
         async with self.db_pool.acquire() as connection:
             guild_ids = await connection.fetch("SELECT guild_id FROM guilds")
@@ -59,10 +83,53 @@ class MyBot(commands.Bot):
                 logging.info(f'Synced commands for guild {guild_id}')
         await self.tree.sync()  # Sync globally as well
 
+    async def apply_personalization_settings(self):
+        async with self.db_pool.acquire() as conn:
+            global_settings = await conn.fetch("SELECT key, value FROM bot_settings WHERE guild_id IS NULL")
+            for setting in global_settings:
+                key, value = setting['key'], setting['value']
+                if key == 'status':
+                    status_map = {
+                        'online': discord.Status.online,
+                        'idle': discord.Status.idle,
+                        'dnd': discord.Status.dnd,
+                        'invisible': discord.Status.invisible
+                    }
+                    await self.change_presence(status=status_map[value])
+                elif key == 'activity_type':
+                    activity_text = await conn.fetchval("SELECT value FROM bot_settings WHERE key = 'activity_text' AND guild_id IS NULL")
+                    if activity_text:
+                        activity_map = {
+                            'playing': discord.ActivityType.playing,
+                            'streaming': discord.ActivityType.streaming,
+                            'listening': discord.ActivityType.listening,
+                            'watching': discord.ActivityType.watching,
+                            'competing': discord.ActivityType.competing
+                        }
+                        activity = discord.Activity(type=activity_map[value], name=activity_text)
+                        await self.change_presence(activity=activity)
+                elif key == 'avatar':
+                    avatar_bytes = base64.b64decode(value)
+                    await self.user.edit(avatar=avatar_bytes)
+
     async def on_ready(self):
         logging.info(f'Logged in as {self.user.name}')
+        # Apply server-specific nicknames
+        await self.apply_server_nicknames()
         # Sync commands every time the bot starts up
         await self.sync_commands()
+
+    async def apply_server_nicknames(self):
+        async with self.db_pool.acquire() as conn:
+            nicknames = await conn.fetch("SELECT guild_id, value FROM bot_settings WHERE key = 'nickname'")
+            for nickname in nicknames:
+                guild = self.get_guild(nickname['guild_id'])
+                if guild:
+                    try:
+                        await guild.me.edit(nick=nickname['value'])
+                        logging.info(f"Applied nickname '{nickname['value']}' in guild {guild.name}")
+                    except discord.Forbidden:
+                        logging.warning(f"Failed to set nickname in guild {guild.name}: Missing permissions")
 
     async def on_guild_join(self, guild):
         try:
@@ -78,6 +145,7 @@ class MyBot(commands.Bot):
         try:
             async with self.db_pool.acquire() as connection:
                 await connection.execute("DELETE FROM guilds WHERE guild_id = $1", guild.id)
+                await connection.execute("DELETE FROM bot_settings WHERE guild_id = $1", guild.id)
                 logging.info(f'Removed from guild: {guild.name} (ID: {guild.id})')
         except Exception as e:
             logging.error(f"Failed to remove guild {guild.id} from database: {e}")

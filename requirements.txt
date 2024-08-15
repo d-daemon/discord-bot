@@ -3,3 +3,5 @@ instaloader
 pytube
 yt-dlp
 asyncpg
+deep_translator
+langdetect
