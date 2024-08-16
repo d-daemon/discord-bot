@@ -27,9 +27,9 @@ class MyBot(commands.Bot):
         # Recreate the bot_settings table
         await self.recreate_bot_settings_table()
 
-        # Load cogs, skipping __init__.py or other non-cog files
+        # Load cogs, skipping __init__.py, *_data.py, or other non-cog files
         for filename in os.listdir('./cogs'):
-            if filename.endswith('.py') and filename != '__init__.py':
+            if filename.endswith('.py') and filename != '__init__.py' and not filename.endswith('_data.py'):
                 cog = f'cogs.{filename[:-3]}'
                 try:
                     await self.load_extension(cog)
