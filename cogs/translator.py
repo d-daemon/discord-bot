@@ -1,9 +1,11 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from deep_translator import GoogleTranslator
 from langdetect import detect
 import asyncio
 import logging
+import re
+from datetime import datetime, timedelta
 from discord.ui import Button, View, Select
 from .language_data import (
     LANGUAGE_EMOJI_MAP,
@@ -95,6 +97,27 @@ class TranslationCog(commands.Cog):
         self.emoji_to_lang = EMOJI_TO_LANG
         self.translated_messages = {}
         self.language_names = self.get_language_names()
+        self.FLAG_EMOJI_PATTERN = re.compile(r'[\U0001F1E6-\U0001F1FF]{2}')
+        self.cleanup_translations.start()
+
+    def cog_unload(self):
+        self.cleanup_translations.cancel()
+
+    @tasks.loop(minutes=15)
+    async def cleanup_translations(self):
+        current_time = datetime.utcnow()
+        to_remove = []
+        for message_id, translations in self.translated_messages.items():
+            for lang, (translation_id, timestamp) in translations.items():
+                if current_time - timestamp > timedelta(hours=1):
+                    to_remove.append((message_id, lang))
+        
+        for message_id, lang in to_remove:
+            del self.translated_messages[message_id][lang]
+            if not self.translated_messages[message_id]:
+                del self.translated_messages[message_id]
+        
+        logging.info(f"Cleaned up {len(to_remove)} old translations")
 
     def get_language_names(self):
         translator = GoogleTranslator()
@@ -133,6 +156,11 @@ class TranslationCog(commands.Cog):
             return
 
         emoji = str(reaction.emoji)
+        logging.info(f"Reaction added: {emoji} by {user}")
+
+        if not self.FLAG_EMOJI_PATTERN.match(emoji):
+            return
+
         if emoji in self.multi_lang_countries:
             options = self.multi_lang_countries[emoji]
             view = LanguageButtons(self, reaction.message, user, options)
@@ -147,7 +175,12 @@ class TranslationCog(commands.Cog):
                 await self.translate_message(reaction.message, selected_lang, user)
                 await prompt.delete()
             except asyncio.TimeoutError:
-                await prompt.delete()        
+                await prompt.delete()
+        elif emoji in self.emoji_to_lang:
+            selected_lang = self.emoji_to_lang[emoji]
+            await self.translate_message(reaction.message, selected_lang, user)
+        else:
+            logging.info(f"Emoji {emoji} not recognized for translation")
 
     async def translate_message(self, message, target_lang, user):
         message_id = message.id
@@ -177,7 +210,7 @@ class TranslationCog(commands.Cog):
             
             if message_id not in self.translated_messages:
                 self.translated_messages[message_id] = {}
-            self.translated_messages[message_id][target_lang] = sent_message.id
+            self.translated_messages[message_id][target_lang] = (sent_message.id, datetime.utcnow())
 
             await message.add_reaction('❤️')
 
@@ -192,22 +225,23 @@ class TranslationCog(commands.Cog):
             return
 
         emoji = str(reaction.emoji)
-        if emoji in self.multi_lang_countries or emoji in self.emoji_to_lang:
+        if not self.FLAG_EMOJI_PATTERN.match(emoji):
+            return
+
+        if emoji in self.emoji_to_lang:
             message_id = reaction.message.id
-            if message_id in self.translated_messages:
-                for lang, translation_id in self.translated_messages[message_id].items():
-                    try:
-                        translation_message = await reaction.message.channel.fetch_message(translation_id)
-                        await translation_message.delete()
-                    except discord.errors.NotFound:
-                        pass
-                
+            target_lang = self.emoji_to_lang[emoji]
+            if message_id in self.translated_messages and target_lang in self.translated_messages[message_id]:
+                translation_id, _ = self.translated_messages[message_id][target_lang]
                 try:
-                    await reaction.message.remove_reaction('❤️', self.bot.user)
+                    translation_message = await reaction.message.channel.fetch_message(translation_id)
+                    await translation_message.delete()
                 except discord.errors.NotFound:
                     pass
-
-                del self.translated_messages[message_id]
+                
+                del self.translated_messages[message_id][target_lang]
+                if not self.translated_messages[message_id]:
+                    del self.translated_messages[message_id]
 
     @commands.command(name='translate')
     async def translate_command(self, ctx, lang: str, *, text: str):
