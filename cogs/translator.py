@@ -152,7 +152,7 @@ class TranslationCog(commands.Cog):
     async def translate_message(self, message, target_lang, user):
         message_id = message.id
         if message_id in self.translated_messages and target_lang in self.translated_messages[message_id]:
-            await message.add_reaction('✅')
+            await message.add_reaction('❤️')
             return
 
         bucket = self.cooldown.get_bucket(message)
@@ -179,7 +179,7 @@ class TranslationCog(commands.Cog):
                 self.translated_messages[message_id] = {}
             self.translated_messages[message_id][target_lang] = sent_message.id
 
-            await message.add_reaction('✅')
+            await message.add_reaction('❤️')
 
         except Exception as e:
             logging.error(f"Translation error: {str(e)}")
