@@ -1,13 +1,41 @@
-import discord
-from discord.ext import commands
-from discord import app_commands
-import instaloader
+import json
+import logging
 import os
+import random
+import time
+from datetime import datetime
+
+import discord
+import instaloader
+from discord import app_commands
+from discord.ext import commands
 from pytube import YouTube
 from yt_dlp import YoutubeDL
-import logging
-import json
-from datetime import datetime
+
+USER_AGENTS = [
+    # Chrome on Windows
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    # Firefox on Windows
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:119.0) Gecko/20100101 Firefox/119.0",
+    # Safari on macOS
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+    # Chrome on macOS
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    # Edge on Windows
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/120.0.0.0 Safari/537.36",
+    # Chrome on Android
+    "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+    # Safari on iOS
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_1_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1"
+]
+
+def get_random_user_agent():
+    """Returns a random User-Agent from the list."""
+    return random.choice(USER_AGENTS)
 
 def unique_filename(directory):
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -17,11 +45,26 @@ def load_config():
     with open('/app/config/config.json', 'r') as config_file:
         return json.load(config_file)
 
+def do_sleep():
+    """Sleep a short time between requests to avoid rate limiting."""
+    sleep_time = min(random.expovariate(0.10), 25.0)
+    if sleep_time < 5:  # minimum time to sleep
+        sleep_time = 5
+    logging.info(f"Rate limiting: Sleeping for {sleep_time} seconds")
+    time.sleep(sleep_time)
+
 def download_instagram_video(post_url, download_dir):
-    L = instaloader.Instaloader(dirname_pattern=download_dir, filename_pattern="{shortcode}", save_metadata=False)
+    L = instaloader.Instaloader(
+        dirname_pattern=download_dir, 
+        filename_pattern="{shortcode}", 
+        save_metadata=False,
+        user_agent=get_random_user_agent()
+        )
     L.download_comments = False
     shortcode = post_url.split('/')[-2]
+    do_sleep()
     post = instaloader.Post.from_shortcode(L.context, shortcode)
+    do_sleep()
     L.download_post(post, target=download_dir)
     video_files = [f for f in os.listdir(download_dir) if f.endswith('.mp4')]
     if not video_files:
@@ -32,37 +75,59 @@ def download_instagram_video(post_url, download_dir):
     return new_video_path
 
 def download_youtube_video(video_url, download_dir):
-    yt = YouTube(video_url)
+    yt_kwargs = {
+        "use_oauth": False,
+        "allow_oauth_cache": False,
+        "http_header": {"User-Agent": get_random_user_agent()}
+    }
+    do_sleep()
+    yt = YouTube(video_url, on_progress_callback=None, **yt_kwargs)
     stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
+    do_sleep()
     output_path = stream.download(output_path=download_dir)
     new_video_path = unique_filename(download_dir)
     os.rename(output_path, new_video_path)
     return new_video_path
 
+def get_ytdlp_opts(output_template):
+    """Get common yt-dlp options with a random User-Agent."""
+    return {
+        'outtmpl': output_template,
+        'format': 'best',
+        'before_download': lambda _: do_sleep(),  # Sleep before each download
+        'http_headers': {'User-Agent': get_random_user_agent()},
+        'quiet': True,
+        'no_warnings': True
+    }
+
 def download_with_ytdlp(video_url, download_dir):
+    do_sleep()
     output_template = unique_filename(download_dir)
-    ydl_opts = {'outtmpl': output_template, 'format': 'bestvideo+bestaudio/best'}
+    ydl_opts = get_ytdlp_opts(output_template)
     with YoutubeDL(ydl_opts) as ydl:
         ydl.extract_info(video_url, download=True)
     return output_template
 
 def download_tiktok_video(video_url, download_dir):
+    do_sleep()
     output_template = unique_filename(download_dir)
-    ydl_opts = {'outtmpl': output_template, 'format': 'best'}
+    ydl_opts = get_ytdlp_opts(output_template)
     with YoutubeDL(ydl_opts) as ydl:
         ydl.extract_info(video_url, download=True)
     return output_template
 
 def download_facebook_reel(video_url, download_dir):
+    do_sleep()
     output_template = unique_filename(download_dir)
-    ydl_opts = {'outtmpl': output_template, 'format': 'best'}
+    ydl_opts = get_ytdlp_opts(output_template)
     with YoutubeDL(ydl_opts) as ydl:
         ydl.extract_info(video_url, download=True)
     return output_template
 
 def download_youtube_short(video_url, download_dir):
+    do_sleep()
     output_template = unique_filename(download_dir)
-    ydl_opts = {'outtmpl': output_template, 'format': 'best'}
+    ydl_opts = get_ytdlp_opts(output_template)
     with YoutubeDL(ydl_opts) as ydl:
         ydl.extract_info(video_url, download=True)
     return output_template
