@@ -1,19 +1,18 @@
-import discord
-from discord.ext import commands, tasks
-from deep_translator import GoogleTranslator
-from langdetect import detect
 import asyncio
 import logging
 import re
 from datetime import datetime, timedelta
-from discord.ui import Button, View, Select
-from .language_data import (
-    LANGUAGE_EMOJI_MAP,
-    MULTI_LANG_COUNTRIES,
-    LANG_CODE_MAP,
-    EMOJI_TO_LANG,
-    ADDITIONAL_LANGUAGE_NAMES
-)
+
+import discord
+from deep_translator import GoogleTranslator
+from discord.ext import commands, tasks
+from discord.ui import Button, Select, View
+from langdetect import detect
+
+from utils.language_data import (ADDITIONAL_LANGUAGE_NAMES, EMOJI_TO_LANG,
+                                 LANG_CODE_MAP, LANGUAGE_EMOJI_MAP,
+                                 MULTI_LANG_COUNTRIES)
+
 
 class LanguagePaginator(View):
     def __init__(self, pages):
