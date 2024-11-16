@@ -1,12 +1,14 @@
-"""bot.py"""
 import os
 import json
-import logging
-import base64
-from typing import Optional
 import discord
 from discord.ext import commands
 import asyncpg
+import logging
+import io
+import base64
+import asyncio
+from typing import Optional, List, Dict, Any
+from datetime import datetime
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,212 +16,244 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+class DatabaseConnectionError(Exception):
+    """Raised when database connection fails."""
+    pass
+
 class MyBot(commands.Bot):
-    def __init__(self, command_prefix, intents, token, database_url, config_path):
+    """
+    A custom Discord bot implementation with enhanced guild management and database integration.
+    
+    This bot class extends discord.py's commands.Bot with additional functionality for:
+    - Database connection management
+    - Guild tracking and synchronization
+    - Personalization settings
+    - Dynamic cog loading
+    
+    Attributes:
+        token (str): The Discord bot token
+        database_url (str): PostgreSQL database connection URL
+        config_path (str): Path to the configuration file
+        db_pool (Optional[asyncpg.Pool]): Connection pool for database operations
+        config (Dict[str, Any]): Bot configuration settings
+        guild_ids (List[int]): Cached list of guild IDs
+        ready_event (asyncio.Event): Event to track bot's ready state
+    """
+
+    def __init__(self, command_prefix: str, intents: discord.Intents, 
+                 token: str, database_url: str, config_path: str):
+        """
+        Initialize the bot with necessary configurations and settings.
+        
+        Args:
+            command_prefix (str): Prefix for bot commands
+            intents (discord.Intents): Discord gateway intents
+            token (str): Discord bot authentication token
+            database_url (str): PostgreSQL database URL
+            config_path (str): Path to configuration file
+        """
         super().__init__(command_prefix=command_prefix, intents=intents)
         self.token = token
         self.database_url = database_url
         self.config_path = config_path
         self.db_pool: Optional[asyncpg.Pool] = None
-
+        self.guild_ids: List[int] = []
+        
         with open(self.config_path, 'r') as config_file:
             self.config = json.load(config_file)
 
-    async def setup_hook(self) -> None:
-        """Initialize the bot's database and load cogs."""
-        try:
-            # Initialize database connection
-            self.db_pool = await self.create_db_pool()
-            if not self.db_pool:
-                logger.error("Failed to create database pool. Bot cannot start.")
+    async def ensure_database_connection(self) -> None:
+        """
+        Ensures database connection is established with retry mechanism.
+        
+        Raises:
+            DatabaseConnectionError: If unable to establish connection after retries.
+        """
+        max_retries = 5
+        retry_delay = 5  # seconds
+
+        for attempt in range(max_retries):
+            try:
+                if self.db_pool is None:
+                    self.db_pool = await asyncpg.create_pool(
+                        self.database_url,
+                        min_size=1,
+                        max_size=10,
+                        command_timeout=30
+                    )
+                    logger.info("Database connection established successfully")
                 return
+            except Exception as e:
+                logger.warning(f"Database connection attempt {attempt + 1} failed: {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay)
+                else:
+                    raise DatabaseConnectionError(f"Failed to connect to database after {max_retries} attempts")
 
-            # Initialize database tables
-            await self.initialize_database()
+    async def execute_db_operation(self, operation):
+        """
+        Executes a database operation with connection checking.
+        
+        Args:
+            operation: Async function that performs the database operation
+            
+        Returns:
+            The result of the database operation
+            
+        Raises:
+            DatabaseConnectionError: If database connection fails
+        """
+        await self.ensure_database_connection()
+        if self.db_pool is None:
+            raise DatabaseConnectionError("Database connection not available")
+        
+        try:
+            async with self.db_pool.acquire() as conn:
+                async with conn.transaction():
+                    return await operation(conn)
+        except asyncpg.PostgresError as e:
+            logger.error(f"Database operation failed: {e}")
+            raise
 
-            # Sync existing guilds
-            await self.sync_guilds()
-
+    async def setup_hook(self) -> None:
+        """
+        Initializes the bot's essential components before starting.
+        This method is automatically called by discord.py.
+        """
+        try:
+            # Initialize database
+            await self.init_database()
+            
+            # Cache guild IDs
+            await self.cache_guild_ids()
+            
             # Load cogs
             await self.load_all_cogs()
-
-            # Apply personalization settings
+            
+            # Sync commands
+            await self.sync_all_commands()
+            
+            # Apply personalization
             await self.apply_personalization_settings()
-
-        except Exception as e:
-            logger.error(f"Error in setup_hook: {str(e)}", exc_info=True)
-            raise
-
-    async def create_db_pool(self) -> Optional[asyncpg.Pool]:
-        """Create and return the database connection pool."""
-        try:
-            return await asyncpg.create_pool(
-                self.database_url,
-                min_size=5,
-                max_size=20
-            )
-        except Exception as e:
-            logger.error(f"Failed to create database pool: {str(e)}", exc_info=True)
-            return None
-
-    async def initialize_database(self) -> None:
-        """Initialize all necessary database tables."""
-        try:
-            async with self.db_pool.acquire() as conn:
-                # Create guilds table if it doesn't exist
-                await conn.execute('''
-                    CREATE TABLE IF NOT EXISTS guilds (
-                        guild_id BIGINT PRIMARY KEY,
-                        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        is_active BOOLEAN DEFAULT TRUE
-                    )
-                ''')
-
-                # Create bot_settings table
-                await conn.execute('''
-                    CREATE TABLE IF NOT EXISTS bot_settings (
-                        key TEXT NOT NULL,
-                        value TEXT,
-                        guild_id BIGINT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        PRIMARY KEY (key, guild_id)
-                    )
-                ''')
-
-            logger.info("Database tables initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize database tables: {str(e)}", exc_info=True)
-            raise
-
-    async def sync_guilds(self) -> None:
-        """Sync all current guilds with the database."""
-        try:
-            current_guild_ids = {guild.id for guild in self.guilds}
             
-            async with self.db_pool.acquire() as conn:
-                # Get existing guild IDs from database
-                db_guild_records = await conn.fetch("SELECT guild_id, is_active FROM guilds")
-                db_guild_ids = {record['guild_id'] for record in db_guild_records}
-                
-                # Add new guilds
-                new_guilds = current_guild_ids - db_guild_ids
-                if new_guilds:
-                    await conn.executemany(
-                        "INSERT INTO guilds (guild_id) VALUES ($1) ON CONFLICT (guild_id) DO UPDATE SET is_active = TRUE",
-                        [(guild_id,) for guild_id in new_guilds]
-                    )
-                    logger.info(f"Added {len(new_guilds)} new guilds to database")
+        except Exception as e:
+            logger.error(f"Failed to complete setup: {e}")
+            raise
 
-                # Mark guilds as inactive if they're in DB but bot is no longer in them
-                inactive_guilds = db_guild_ids - current_guild_ids
-                if inactive_guilds:
-                    await conn.executemany(
-                        "UPDATE guilds SET is_active = FALSE WHERE guild_id = $1",
-                        [(guild_id,) for guild_id in inactive_guilds]
-                    )
-                    logger.info(f"Marked {len(inactive_guilds)} guilds as inactive")
-
-                # Reactivate guilds if they were previously marked inactive
-                await conn.executemany(
-                    "UPDATE guilds SET is_active = TRUE WHERE guild_id = $1",
-                    [(guild_id,) for guild_id in current_guild_ids]
+    async def init_database(self) -> None:
+        """
+        Initializes the database connection and creates necessary tables.
+        """
+        async def create_tables(conn):
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS guilds (
+                    guild_id BIGINT PRIMARY KEY,
+                    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
-
-            # Sync commands for all active guilds
-            await self.sync_commands()
+            ''')
             
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS bot_settings (
+                    key TEXT NOT NULL,
+                    value TEXT,
+                    guild_id BIGINT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (key, guild_id)
+                )
+            ''')
+        
+        try:
+            await self.execute_db_operation(create_tables)
+            logger.info("Database initialization complete")
         except Exception as e:
-            logger.error(f"Failed to sync guilds: {str(e)}", exc_info=True)
+            logger.error(f"Database initialization failed: {e}")
             raise
 
-    async def load_all_cogs(self) -> None:
-        """Load all cogs from the cogs directory."""
-        for filename in os.listdir('./cogs'):
-            if filename.endswith('.py') and not filename.startswith(('__', '_')) and not filename.endswith('_data.py'):
-                cog_name = f'cogs.{filename[:-3]}'
-                try:
-                    await self.load_extension(cog_name)
-                    logger.info(f"Successfully loaded cog: {cog_name}")
-                except Exception as e:
-                    logger.error(f"Failed to load cog {cog_name}: {str(e)}", exc_info=True)
+    async def cache_guild_ids(self) -> None:
+        """
+        Caches guild IDs from the database and synchronizes with current guilds.
+        """
+        async def fetch_guilds(conn):
+            return await conn.fetch("SELECT guild_id FROM guilds")
 
-    async def sync_commands(self) -> None:
-        """Sync commands for all active guilds."""
         try:
-            async with self.db_pool.acquire() as conn:
-                active_guilds = await conn.fetch("SELECT guild_id FROM guilds WHERE is_active = TRUE")
-                
-                for record in active_guilds:
-                    guild_id = record['guild_id']
-                    try:
-                        await self.tree.sync(guild=discord.Object(id=guild_id))
-                        logger.info(f'Synced commands for guild {guild_id}')
-                    except Exception as e:
-                        logger.error(f"Failed to sync commands for guild {guild_id}: {str(e)}")
-                
-                # Sync global commands
-                await self.tree.sync()
-                logger.info("Synced global commands")
-                
+            rows = await self.execute_db_operation(fetch_guilds)
+            self.guild_ids = [row['guild_id'] for row in rows]
+            
+            # Sync with current guilds
+            current_guild_ids = [guild.id for guild in self.guilds]
+            
+            # Add missing guilds to database
+            for guild_id in current_guild_ids:
+                if guild_id not in self.guild_ids:
+                    await self.add_guild_to_db(guild_id)
+            
+            logger.info(f"Cached {len(self.guild_ids)} guild IDs")
         except Exception as e:
-            logger.error(f"Failed to sync commands: {str(e)}", exc_info=True)
+            logger.error(f"Failed to cache guild IDs: {e}")
+            raise
 
     async def apply_personalization_settings(self) -> None:
-        """Apply saved personalization settings."""
+        """
+        Applies personalization settings from the database, including status,
+        activity, and avatar settings.
+        """
+        async def fetch_settings(conn):
+            return await conn.fetch(
+                "SELECT key, value FROM bot_settings WHERE guild_id = 0"
+            )
+
         try:
-            async with self.db_pool.acquire() as conn:
-                global_settings = await conn.fetch(
-                    "SELECT key, value FROM bot_settings WHERE guild_id = 0"
-                )
+            global_settings = await self.execute_db_operation(fetch_settings)
+            
+            for setting in global_settings:
+                key, value = setting['key'], setting['value']
                 
-                for setting in global_settings:
-                    key, value = setting['key'], setting['value']
-                    
-                    if key == 'status':
-                        status_map = {
-                            'online': discord.Status.online,
-                            'idle': discord.Status.idle,
-                            'dnd': discord.Status.dnd,
-                            'invisible': discord.Status.invisible
-                        }
-                        if value in status_map:
-                            await self.change_presence(status=status_map[value])
-                    
-                    elif key == 'activity_type':
-                        activity_text = await conn.fetchval(
+                if key == 'status':
+                    status_map = {
+                        'online': discord.Status.online,
+                        'idle': discord.Status.idle,
+                        'dnd': discord.Status.dnd,
+                        'invisible': discord.Status.invisible
+                    }
+                    if value in status_map:
+                        await self.change_presence(status=status_map[value])
+                
+                elif key == 'activity_type':
+                    async def fetch_activity_text(conn):
+                        return await conn.fetchval(
                             "SELECT value FROM bot_settings WHERE key = 'activity_text' AND guild_id = 0"
                         )
-                        if activity_text:
-                            activity_map = {
-                                'playing': discord.ActivityType.playing,
-                                'streaming': discord.ActivityType.streaming,
-                                'listening': discord.ActivityType.listening,
-                                'watching': discord.ActivityType.watching,
-                                'competing': discord.ActivityType.competing
-                            }
-                            if value in activity_map:
-                                activity = discord.Activity(type=activity_map[value], name=activity_text)
-                                await self.change_presence(activity=activity)
                     
-                    elif key == 'avatar':
-                        try:
-                            avatar_bytes = base64.b64decode(value)
-                            await self.user.edit(avatar=avatar_bytes)
-                        except Exception as e:
-                            logger.error(f"Failed to update avatar: {str(e)}")
-                            
-        except Exception as e:
-            logger.error(f"Failed to apply personalization settings: {str(e)}", exc_info=True)
+                    activity_text = await self.execute_db_operation(fetch_activity_text)
+                    if activity_text:
+                        activity_map = {
+                            'playing': discord.ActivityType.playing,
+                            'streaming': discord.ActivityType.streaming,
+                            'listening': discord.ActivityType.listening,
+                            'watching': discord.ActivityType.watching,
+                            'competing': discord.ActivityType.competing
+                        }
+                        if value in activity_map:
+                            activity = discord.Activity(type=activity_map[value], name=activity_text)
+                            await self.change_presence(activity=activity)
+                
+                elif key == 'avatar':
+                    try:
+                        avatar_bytes = base64.b64decode(value)
+                        await self.user.edit(avatar=avatar_bytes)
+                    except Exception as e:
+                        logger.error(f"Failed to set avatar: {e}")
 
-    async def on_ready(self) -> None:
-        """Handle bot ready event."""
-        logger.info(f'Logged in as {self.user.name} (ID: {self.user.id})')
-        await self.apply_server_nicknames()
-        await self.sync_guilds()  # Resync guilds when bot comes online
+            logger.info("Applied global personalization settings")
+        except Exception as e:
+            logger.error(f"Failed to apply personalization settings: {e}")
+
 
     async def apply_server_nicknames(self) -> None:
-        """Apply saved nicknames for each guild."""
+        """
+        Applies saved nicknames for the bot in each guild.
+        """
         try:
             async with self.db_pool.acquire() as conn:
                 nicknames = await conn.fetch(
@@ -234,65 +268,133 @@ class MyBot(commands.Bot):
                             logger.info(f"Applied nickname '{nickname['value']}' in guild {guild.name}")
                         except discord.Forbidden:
                             logger.warning(f"Failed to set nickname in guild {guild.name}: Missing permissions")
-                            
+                        except Exception as e:
+                            logger.error(f"Failed to set nickname in guild {guild.name}: {e}")
         except Exception as e:
-            logger.error(f"Failed to apply server nicknames: {str(e)}", exc_info=True)
+            logger.error(f"Failed to apply server nicknames: {e}")
+
+    async def load_all_cogs(self) -> None:
+        """
+        Loads all cogs from the cogs directory.
+        """
+        for filename in os.listdir('./cogs'):
+            if filename.endswith('.py') and not filename.startswith('__'):
+                cog_name = f'cogs.{filename[:-3]}'
+                try:
+                    await self.load_extension(cog_name)
+                    logger.info(f"Loaded cog: {cog_name}")
+                except Exception as e:
+                    logger.error(f"Failed to load cog {cog_name}: {e}")
+
+    async def sync_all_commands(self) -> None:
+        """
+        Synchronizes application commands globally and per guild.
+        """
+        try:
+            # Sync global commands
+            await self.tree.sync()
+            
+            # Sync guild-specific commands
+            for guild_id in self.guild_ids:
+                await self.tree.sync(guild=discord.Object(id=guild_id))
+            
+            logger.info("Command synchronization complete")
+        except Exception as e:
+            logger.error(f"Command synchronization failed: {e}")
+
+    async def add_guild_to_db(self, guild_id: int) -> None:
+        """
+        Adds a new guild to the database.
+        
+        Args:
+            guild_id (int): The Discord guild ID to add
+        """
+        try:
+            async with self.db_pool.acquire() as conn:
+                await conn.execute(
+                    "INSERT INTO guilds (guild_id) VALUES ($1) ON CONFLICT DO NOTHING",
+                    guild_id
+                )
+                if guild_id not in self.guild_ids:
+                    self.guild_ids.append(guild_id)
+                logger.info(f"Added guild {guild_id} to database")
+        except Exception as e:
+            logger.error(f"Failed to add guild {guild_id}: {e}")
+
+    async def remove_guild_from_db(self, guild_id: int) -> None:
+        """
+        Removes a guild from the database.
+        
+        Args:
+            guild_id (int): The Discord guild ID to remove
+        """
+        try:
+            async with self.db_pool.acquire() as conn:
+                await conn.execute("DELETE FROM guilds WHERE guild_id = $1", guild_id)
+                await conn.execute("DELETE FROM bot_settings WHERE guild_id = $1", guild_id)
+                if guild_id in self.guild_ids:
+                    self.guild_ids.remove(guild_id)
+                logger.info(f"Removed guild {guild_id} from database")
+        except Exception as e:
+            logger.error(f"Failed to remove guild {guild_id}: {e}")
 
     async def on_guild_join(self, guild: discord.Guild) -> None:
-        """Handle bot joining a new guild."""
-        try:
-            async with self.db_pool.acquire() as conn:
-                # Add guild to database or reactivate if it existed
-                await conn.execute('''
-                    INSERT INTO guilds (guild_id, is_active) 
-                    VALUES ($1, TRUE) 
-                    ON CONFLICT (guild_id) 
-                    DO UPDATE SET is_active = TRUE, joined_at = CURRENT_TIMESTAMP
-                ''', guild.id)
-                
-                # Sync commands for the new guild
-                await self.tree.sync(guild=discord.Object(id=guild.id))
-                logger.info(f'Joined new guild: {guild.name} (ID: {guild.id})')
-                
-        except Exception as e:
-            logger.error(f"Failed to process guild join for {guild.id}: {str(e)}", exc_info=True)
+        """
+        Handles the bot joining a new guild.
+        
+        Args:
+            guild (discord.Guild): The guild that was joined
+        """
+        await self.add_guild_to_db(guild.id)
+        await self.tree.sync(guild=discord.Object(id=guild.id))
+        logger.info(f"Joined new guild: {guild.name} (ID: {guild.id})")
 
     async def on_guild_remove(self, guild: discord.Guild) -> None:
-        """Handle bot leaving a guild."""
-        try:
-            async with self.db_pool.acquire() as conn:
-                # Mark guild as inactive instead of deleting
-                await conn.execute(
-                    "UPDATE guilds SET is_active = FALSE WHERE guild_id = $1",
-                    guild.id
-                )
-                logger.info(f'Removed from guild: {guild.name} (ID: {guild.id})')
-                
-        except Exception as e:
-            logger.error(f"Failed to process guild remove for {guild.id}: {str(e)}", exc_info=True)
+        """
+        Handles the bot being removed from a guild.
+        
+        Args:
+            guild (discord.Guild): The guild that was left
+        """
+        await self.remove_guild_from_db(guild.id)
+        logger.info(f"Removed from guild: {guild.name} (ID: {guild.id})")
+
+    async def on_ready(self) -> None:
+        """
+        Handles the bot's ready event.
+        """
+        logger.info(f'Logged in as {self.user.name}')
+        await self.cache_guild_ids()
+        await self.apply_server_nicknames()
+        await self.sync_all_commands()
 
     async def start_bot(self) -> None:
-        """Start the bot."""
+        """
+        Starts the bot with the configured token.
+        """
         try:
             await self.start(self.token)
         except Exception as e:
-            logger.error(f"Failed to start bot: {str(e)}", exc_info=True)
+            logger.error(f"Failed to start bot: {e}")
             raise
 
 if __name__ == "__main__":
+    # Set up intents
     intents = discord.Intents.all()
 
+    # Load configuration
     config_path = 'config/config.json'
     with open(config_path, 'r') as config_file:
         config = json.load(config_file)
 
+    # Get environment variables
     TOKEN = os.getenv('DISCORD_BOT_TOKEN')
     DATABASE_URL = os.getenv('DATABASE_URL')
 
-    if not TOKEN or not DATABASE_URL:
-        logger.error("Missing required environment variables")
-        exit(1)
+    if not all([TOKEN, DATABASE_URL]):
+        raise EnvironmentError("Missing required environment variables")
 
+    # Create and run bot
     bot = MyBot(
         command_prefix=config['prefix'],
         intents=intents,
@@ -301,4 +403,5 @@ if __name__ == "__main__":
         config_path=config_path
     )
 
+    # Run the bot
     bot.run(TOKEN)
