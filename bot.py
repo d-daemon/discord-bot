@@ -1,14 +1,15 @@
-import os
+import asyncio
+import base64
+import io
 import json
+import logging
+import os
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+import asyncpg
 import discord
 from discord.ext import commands
-import asyncpg
-import logging
-import io
-import base64
-import asyncio
-from typing import Optional, List, Dict, Any
-from datetime import datetime
 
 logging.basicConfig(
     level=logging.INFO,
