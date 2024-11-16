@@ -1,12 +1,5 @@
 # Use an official Python runtime as a parent image
 FROM python:3.9-slim
-FROM postgres:latest
-
-# Copy initialization scripts
-COPY pg_init/01-configure-pg-hba.sh /docker-entrypoint-initdb.d/
-
-# Make sure the script is executable
-RUN chmod +x /docker-entrypoint-initdb.d/01-configure-pg-hba.sh
 
 # Metadata
 LABEL image="https://hub.docker.com/r/hhxcusco/discord-bot"
