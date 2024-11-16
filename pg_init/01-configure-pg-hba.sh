@@ -1,9 +1,8 @@
-﻿cat > pg_init/01-configure-pg-hba.sh << EOF
-#!/bin/bash
+﻿#!/bin/bash
 set -e
 
 # Write the new pg_hba.conf
-cat > "\$PGDATA/pg_hba.conf" << EOC
+cat > "$PGDATA/pg_hba.conf" << EOC
 # TYPE  DATABASE        USER            ADDRESS                 METHOD
 
 # IPv4 local connections:
@@ -20,5 +19,4 @@ host    replication     all             127.0.0.1/32            trust
 EOC
 
 # Set proper permissions
-chmod 600 "\$PGDATA/pg_hba.conf"
-EOC
+chmod 600 "$PGDATA/pg_hba.conf"
