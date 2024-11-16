@@ -1,11 +1,14 @@
-import discord
-from discord.ext import commands
-from discord import app_commands
-import instaloader
-import os
-import logging
-from datetime import datetime
 import json
+import logging
+import os
+from datetime import datetime
+
+import discord
+import instaloader
+from discord import app_commands
+from discord.ext import commands
+from utils.helpers import get_random_user_agent, do_sleep
+
 
 def unique_filename(directory, base_name, index):
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -16,10 +19,19 @@ def load_config():
         return json.load(config_file)
 
 def download_instagram_photos(post_url, download_dir):
-    L = instaloader.Instaloader(dirname_pattern=download_dir, filename_pattern="{shortcode}", save_metadata=False)
+    L = instaloader.Instaloader(
+        dirname_pattern=download_dir, 
+        filename_pattern="{shortcode}", 
+        save_metadata=False,
+        user_agent=get_random_user_agent()
+        )
+    L.download_comments = False
     shortcode = post_url.split('/')[-2]
+
+    do_sleep()
     post = instaloader.Post.from_shortcode(L.context, shortcode)
-    
+
+    do_sleep()
     L.download_post(post, target=download_dir)
     
     photo_files = [f for f in os.listdir(download_dir) if f.endswith('.jpg')]
