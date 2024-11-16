@@ -19,7 +19,7 @@ services:
       - "shared_buffers=256MB"
     volumes:
       - /volume1/docker/postgresql/data:/var/lib/postgresql/data/pgdata
-      - ./pg_init:/docker-entrypoint-initdb.d
+      - /volume1/docker/postgresql/init:/docker-entrypoint-initdb.d
     ports:
       - "5433:5432"
     restart: unless-stopped
