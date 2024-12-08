@@ -1,10 +1,9 @@
 import asyncio
-import base64
-import io
-import json
 import logging
+import base64
+import json
 import os
-from datetime import datetime
+import sys
 from typing import Any, Dict, List, Optional
 
 import asyncpg
@@ -71,14 +70,16 @@ class MyBot(commands.Bot):
         for attempt in range(max_retries):
             try:
                 if self.db_pool is None:
-                    # Set a timeout for the connection attempt
-                    async with asyncio.timeout(timeout):
-                        self.db_pool = await asyncpg.create_pool(
+                    # Use asyncio.wait_for instead of asyncio.timeout for Python 3.9 compatibility
+                    self.db_pool = await asyncio.wait_for(
+                        asyncpg.create_pool(
                             self.database_url,
                             min_size=1,
                             max_size=10,
                             command_timeout=30
-                        )
+                        ),
+                        timeout=timeout
+                    )
                     logger.info("Database connection established successfully")
                 return
             except asyncio.TimeoutError:
@@ -90,6 +91,7 @@ class MyBot(commands.Bot):
                 await asyncio.sleep(retry_delay)
             else:
                 raise DatabaseConnectionError(f"Failed to connect to database after {max_retries} attempts")
+
 
     async def execute_db_operation(self, operation):
         """
@@ -431,15 +433,14 @@ class MyBot(commands.Bot):
             raise
 
 if __name__ == "__main__":
-    # Modify the main execution to handle initialization errors
-    try:
-        # Set up logging first
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
-        logger = logging.getLogger(__name__)
+    # Set up logging first
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    logger = logging.getLogger(__name__)
 
+    try:
         # Set up intents
         intents = discord.Intents.all()
 
