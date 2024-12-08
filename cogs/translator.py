@@ -9,7 +9,7 @@ from discord.ext import commands, tasks
 from discord.ui import Button, Select, View
 from langdetect import detect
 
-from utils.language_data import (ADDITIONAL_LANGUAGE_NAMES, EMOJI_TO_LANG,
+from utils.__language_data import (ADDITIONAL_LANGUAGE_NAMES, EMOJI_TO_LANG,
                                  LANG_CODE_MAP, LANGUAGE_EMOJI_MAP,
                                  MULTI_LANG_COUNTRIES)
 
