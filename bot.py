@@ -1,14 +1,21 @@
 import asyncio
-import logging
 import base64
+import io
 import json
+import logging
 import os
-import sys
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import asyncpg
 import discord
 from discord.ext import commands
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 class DatabaseConnectionError(Exception):
     """Raised when database connection fails."""
@@ -65,33 +72,24 @@ class MyBot(commands.Bot):
         """
         max_retries = 5
         retry_delay = 5  # seconds
-        timeout = 30  # seconds
 
         for attempt in range(max_retries):
             try:
                 if self.db_pool is None:
-                    # Use asyncio.wait_for instead of asyncio.timeout for Python 3.9 compatibility
-                    self.db_pool = await asyncio.wait_for(
-                        asyncpg.create_pool(
-                            self.database_url,
-                            min_size=1,
-                            max_size=10,
-                            command_timeout=30
-                        ),
-                        timeout=timeout
+                    self.db_pool = await asyncpg.create_pool(
+                        self.database_url,
+                        min_size=1,
+                        max_size=10,
+                        command_timeout=30
                     )
                     logger.info("Database connection established successfully")
                 return
-            except asyncio.TimeoutError:
-                logger.warning(f"Database connection attempt {attempt + 1} timed out")
             except Exception as e:
                 logger.warning(f"Database connection attempt {attempt + 1} failed: {e}")
-            
-            if attempt < max_retries - 1:
-                await asyncio.sleep(retry_delay)
-            else:
-                raise DatabaseConnectionError(f"Failed to connect to database after {max_retries} attempts")
-
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay)
+                else:
+                    raise DatabaseConnectionError(f"Failed to connect to database after {max_retries} attempts")
 
     async def execute_db_operation(self, operation):
         """
@@ -124,75 +122,24 @@ class MyBot(commands.Bot):
         This method is automatically called by discord.py.
         """
         try:
-            # First establish database connection
-            await self.ensure_database_connection()
-            logger.info("Database connection established")
-
-            # Initialize database tables
+            # Initialize database
             await self.init_database()
-            logger.info("Database tables initialized")
-
-            # Wait a short time to ensure database is ready
-            await asyncio.sleep(2)
-
-            # Load cogs first as they don't depend on guild data
-            await self.load_all_cogs()
-            logger.info("Cogs loaded successfully")
-
-            # Now cache guild IDs
+            
+            # Cache guild IDs
             await self.cache_guild_ids()
-            logger.info("Guild IDs cached successfully")
-
-            # Sync commands after guild data is cached
+            
+            # Load cogs
+            await self.load_all_cogs()
+            
+            # Sync commands
             await self.sync_all_commands()
-            logger.info("Commands synchronized")
-
-            # Apply personalization last
+            
+            # Apply personalization
             await self.apply_personalization_settings()
-            logger.info("Personalization settings applied")
-
-        except DatabaseConnectionError as e:
-            logger.critical(f"Database connection failed: {e}")
-            # Gracefully shutdown the bot
-            await self.close()
-            raise
+            
         except Exception as e:
-            logger.critical(f"Setup failed: {e}")
-            await self.close()
+            logger.error(f"Failed to complete setup: {e}")
             raise
-
-    async def on_ready(self) -> None:
-        """
-        Modified ready event handler with retry mechanism for critical operations.
-        """
-        logger.info(f'Logged in as {self.user.name}')
-        
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                # Ensure database connection is still alive
-                await self.ensure_database_connection()
-                
-                # Refresh guild cache
-                await self.cache_guild_ids()
-                
-                # Apply nicknames
-                await self.apply_server_nicknames()
-                
-                # Final command sync
-                await self.sync_all_commands()
-                
-                logger.info("Bot successfully initialized and ready")
-                return
-                
-            except Exception as e:
-                logger.error(f"Ready event initialization attempt {attempt + 1} failed: {e}")
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(5)
-                else:
-                    logger.critical("Failed to complete ready event initialization")
-                    await self.close()
-                    raise
 
     async def init_database(self) -> None:
         """
@@ -433,41 +380,29 @@ class MyBot(commands.Bot):
             raise
 
 if __name__ == "__main__":
-    # Set up logging first
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    # Set up intents
+    intents = discord.Intents.all()
+
+    # Load configuration
+    config_path = 'config/config.json'
+    with open(config_path, 'r') as config_file:
+        config = json.load(config_file)
+
+    # Get environment variables
+    TOKEN = os.getenv('DISCORD_BOT_TOKEN')
+    DATABASE_URL = os.getenv('DATABASE_URL')
+
+    if not all([TOKEN, DATABASE_URL]):
+        raise EnvironmentError("Missing required environment variables")
+
+    # Create and run bot
+    bot = MyBot(
+        command_prefix=config['prefix'],
+        intents=intents,
+        token=TOKEN,
+        database_url=DATABASE_URL,
+        config_path=config_path
     )
-    logger = logging.getLogger(__name__)
 
-    try:
-        # Set up intents
-        intents = discord.Intents.all()
-
-        # Load configuration
-        config_path = 'config/config.json'
-        with open(config_path, 'r') as config_file:
-            config = json.load(config_file)
-
-        # Get environment variables
-        TOKEN = os.getenv('DISCORD_BOT_TOKEN')
-        DATABASE_URL = os.getenv('DATABASE_URL')
-
-        if not all([TOKEN, DATABASE_URL]):
-            raise EnvironmentError("Missing required environment variables")
-
-        # Create and run bot with error handling
-        bot = MyBot(
-            command_prefix=config['prefix'],
-            intents=intents,
-            token=TOKEN,
-            database_url=DATABASE_URL,
-            config_path=config_path
-        )
-
-        # Run the bot
-        bot.run(TOKEN)
-
-    except Exception as e:
-        logger.critical(f"Fatal error: {e}")
-        sys.exit(1)
+    # Run the bot
+    bot.run(TOKEN)
