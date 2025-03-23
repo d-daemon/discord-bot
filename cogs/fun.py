@@ -1,6 +1,5 @@
-import discord
-from discord.ext import commands
 import random
+from discord.ext import commands
 import aiohttp
 
 class Fun(commands.Cog):

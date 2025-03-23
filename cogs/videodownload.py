@@ -112,8 +112,8 @@ class VideoDownload(commands.Cog):
     async def setup(self):
         logging.info("Fetching guild IDs for VideoDownload cog.")
         guild_ids = await self.fetch_guild_ids()
-        for guild_id in guild_ids:
-            self.bot.tree.add_command(self.download_video, guild=discord.Object(id=guild_id))
+        # for guild_id in guild_ids:
+        #     self.bot.tree.add_command(self.download_video, guild=discord.Object(id=guild_id))
         logging.info("VideoDownload cog commands added for guilds.")
 
     async def fetch_guild_ids(self):

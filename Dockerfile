@@ -1,5 +1,7 @@
-# Use an official Python runtime as a parent image
-FROM python:3.12-slim
+# Use an official Python runtime as a parent image. Add --platform flag to specify the architecture.
+#FROM python:3.12-slim
+## Local dev for macOS M4 Apple Silicon
+FROM --platform=linux/arm64/v8 python:3.12-slim
 
 # Metadata
 LABEL image="https://hub.docker.com/r/hhxcusco/discord-bot"
