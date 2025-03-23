@@ -1,9 +1,9 @@
-name: Docker Elly
+name: Docker Snow
 
 on:
   push:
     branches:
-      - master
+      - dev
 
 jobs:
   build:
@@ -27,8 +27,8 @@ jobs:
         with:
           context: .
           push: true
-          tags: hhxcusco/discord-bot:latest
-          cache-from: type=registry,ref=hhxcusco/discord-bot:latest
+          tags: hhxcusco/discord-bot:dev
+          cache-from: type=registry,ref=hhxcusco/discord-bot:dev
           cache-to: type=inline
 
       - name: Install Docker Compose
