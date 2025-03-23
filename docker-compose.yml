@@ -2,7 +2,7 @@ version: '3.8'
 services:
   postgresql:
     image: postgres:latest
-    container_name: postgresql-snow
+    container_name: postgresql
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -34,8 +34,8 @@ services:
   discord-bot:
     build:
       context: .
-    image: discord-bot:dev
-    container_name: discord-bot-snow
+    image: discord-bot:latest
+    container_name: discord-bot
     ports:
       - "26218:5000"
     environment:
