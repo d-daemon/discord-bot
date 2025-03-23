@@ -129,6 +129,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+venv39/
+dev/
 
 # Spyder project settings
 .spyderproject
@@ -162,3 +164,7 @@ cython_debug/
 #.idea/
 .env.dev
 FolderHierarchy.md
+.gitignore
+config/config.json
+.DS_Store
+.gitignore

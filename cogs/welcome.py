@@ -1,6 +1,6 @@
+import json
 import discord
 from discord.ext import commands
-import json
 
 def load_config():
     with open('/app/config/config.json', 'r') as config_file:
@@ -27,7 +27,7 @@ class Welcome(commands.Cog):
         self.config = load_config()  # Reload configuration
         channel = discord.utils.get(member.guild.text_channels, name=self.goodbye_channel_name)
         if channel:
-            await channel.send(f'Sad to see you go, {member.mention}. Goodbye!')
+            await channel.send('RIP BOZO')
 
 async def setup(bot):
     await bot.add_cog(Welcome(bot))

@@ -1,9 +1,7 @@
+import base64
 import discord
 from discord.ext import commands
 from discord import app_commands
-import asyncpg
-import io
-import base64
 
 class Personalization(commands.Cog):
     def __init__(self, bot):
@@ -11,9 +9,9 @@ class Personalization(commands.Cog):
 
     async def setup(self):
         guild_ids = await self.fetch_guild_ids()
-        for guild_id in guild_ids:
-            self.bot.tree.add_command(self.personalize, guild=discord.Object(id=guild_id))
-            self.bot.tree.add_command(self.set_avatar, guild=discord.Object(id=guild_id))
+        # for guild_id in guild_ids:
+        #     self.bot.tree.add_command(self.personalize, guild=discord.Object(id=guild_id))
+        #     self.bot.tree.add_command(self.set_avatar, guild=discord.Object(id=guild_id))
 
     async def fetch_guild_ids(self):
         async with self.bot.db_pool.acquire() as connection:

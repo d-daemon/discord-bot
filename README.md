@@ -1,7 +1,7 @@
 # Discord Bot
 
 ![Production Build Status](https://github.com/d-daemon/discord-bot/actions/workflows/docker-image.yml/badge.svg?branch=master)
-![Python Version](https://img.shields.io/badge/Python-3.9_|_3.10_|_3.11-blue.svg)
+![Python Version](https://img.shields.io/badge/Python-3.9_|_3.10_|_3.11_|_3.12-blue.svg)
 ![License](https://img.shields.io/github/license/d-daemon/discord-bot)
 ![Docker Pulls](https://img.shields.io/docker/pulls/hhxcusco/discord-bot)
 ![Docker Image Size](https://img.shields.io/docker/image-size/hhxcusco/discord-bot/latest)
