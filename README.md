@@ -1,7 +1,7 @@
 # Discord Bot
 
 ![Production Build Status](https://github.com/d-daemon/discord-bot/actions/workflows/docker-image.yml/badge.svg?branch=master)
-![Python Version](https://img.shields.io/badge/Python-3.9_|_3.10_|_3.11_|_3.12-blue.svg)
+![Python Version](https://img.shields.io/badge/Python-3.9_|_3.10_|_3.11-blue.svg)
 ![License](https://img.shields.io/github/license/d-daemon/discord-bot)
 ![Docker Pulls](https://img.shields.io/docker/pulls/hhxcusco/discord-bot)
 ![Docker Image Size](https://img.shields.io/docker/image-size/hhxcusco/discord-bot/latest)
@@ -15,11 +15,12 @@ A Discord bot built using `discord.py` for various functionalities such as moder
 ## Features
 
 - **Welcome and Goodbye Messages**: Sends welcome messages when a new member joins and goodbye messages when a member leaves.
+- **Bot Personalization**: Customize the bot's status, activity, and profile picture.
 - **Moderation Commands**: Includes commands like kick and ban.
-- **Role Management**: Add or remove roles from users.
 - **Fun Commands**: Commands like dice rolling and jokes.
 - **Informational Commands**: Commands to fetch user information.
 - **Video Download Commands**: Download videos from various platforms including Instagram, YouTube, TikTok, Facebook, and more.
+- **Photo Download Command**: Download photos from Instagram.
 
 ## Setup Instructions
 
@@ -77,12 +78,13 @@ A Discord bot built using `discord.py` for various functionalities such as moder
    Create a file named `docker-image.yml` in the `.github/workflows` directory with the following content. 
    
      ```yaml
-   name: Docker Elly
+   name: Docker Image CI/CD
    
    on:
      push:
        branches:
-         - master
+         - main
+         - dev
    
    jobs:
      build:
@@ -90,23 +92,31 @@ A Discord bot built using `discord.py` for various functionalities such as moder
    
        steps:
          - name: Checkout code
-           uses: actions/checkout@v2
+           uses: actions/checkout@v4
    
          - name: Set up Docker Buildx
-           uses: docker/setup-buildx-action@v1
+           uses: docker/setup-buildx-action@v3
    
          - name: Log in to Docker Hub
-           uses: docker/login-action@v1
+           uses: docker/login-action@v3
            with:
              username: ${{ secrets.DOCKER_USERNAME }}
              password: ${{ secrets.DOCKER_PASSWORD }}
    
          - name: Build and push Docker image
-           uses: docker/build-push-action@v2
+           uses: docker/build-push-action@v5
            with:
              context: .
              push: true
-             tags: hhxcusco/discord-bot:latest
+             tags: |
+               hhxcusco/discord-bot:${{ github.ref == 'refs/heads/main' && 'latest' || 'dev' }}
+             cache-from: type=registry,ref=hhxcusco/discord-bot:${{ github.ref == 'refs/heads/main' && 'latest' || 'dev' }}
+             cache-to: type=inline
+   
+         - name: Install Docker Compose
+           run: |
+             sudo apt-get update
+             sudo apt-get install -y docker-compose
    
          - name: Deploy
            env:
@@ -124,34 +134,51 @@ A Discord bot built using `discord.py` for various functionalities such as moder
    
      ```yaml
    version: '3.8'
-   
    services:
      postgresql:
        image: postgres:latest
-       container_name: postgresql
+       container_name: postgresql-snow
        environment:
          POSTGRES_DB: ${POSTGRES_DB}
          POSTGRES_USER: ${POSTGRES_USER}
          POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+         POSTGRES_HOST_AUTH_METHOD: trust
+         PGDATA: /var/lib/postgresql/data/pgdata
+       command: 
+         - "postgres"
+         - "-c"
+         - "listen_addresses=*"
+         - "-c"
+         - "max_connections=100"
+         - "-c"
+         - "shared_buffers=256MB"
        volumes:
-         - /volume1/docker/postgresql/data:/var/lib/postgresql/data
+         - ./postgresql/data:/var/lib/postgresql/data/pgdata
+         - ./postgresql/init:/docker-entrypoint-initdb.d
        ports:
          - "5433:5432"
-       restart: "no"
+       restart: unless-stopped
+       healthcheck:
+         test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+         interval: 5s
+         timeout: 5s
+         retries: 5
        networks:
          - discord-bot-net
    
      discord-bot:
-       image: hhxcusco/discord-bot:latest
-       container_name: discord-bot
+       build:
+         context: .
+       image: discord-bot:dev
+       container_name: discord-bot-snow
        ports:
          - "26218:5000"
        environment:
-         - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
-         - DATABASE_URL=${DATABASE_URL}
+         DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
+         DATABASE_URL: ${DATABASE_URL}
        volumes:
-         - /volume1/docker/discord-bot/config:/app/config
-         - /volume1/docker/discord-bot/data:/app/data
+         - ./config:/app/config
+         - ./data:/app/data
        restart: unless-stopped
        networks:
          - discord-bot-net
