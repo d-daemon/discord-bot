@@ -1,8 +1,9 @@
-name: Docker Snow
+name: Docker Image CI/CD
 
 on:
   push:
     branches:
+      - main
       - dev
 
 jobs:
@@ -27,8 +28,9 @@ jobs:
         with:
           context: .
           push: true
-          tags: hhxcusco/discord-bot:dev
-          cache-from: type=registry,ref=hhxcusco/discord-bot:dev
+          tags: |
+            hhxcusco/discord-bot:${{ github.ref == 'refs/heads/main' && 'latest' || 'dev' }}
+          cache-from: type=registry,ref=hhxcusco/discord-bot:${{ github.ref == 'refs/heads/main' && 'latest' || 'dev' }}
           cache-to: type=inline
 
       - name: Install Docker Compose
