@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 import aiohttp
-from paginator import PaginatorView
+from utils.paginator import PaginatorView
 from PyMultiDictionary import MultiDictionary, DICT_MW
 
 
