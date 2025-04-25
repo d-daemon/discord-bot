@@ -72,7 +72,7 @@ class Define(commands.Cog):
             return await ctx.send(f"Could not find the definition for **{word}**.")
 
         pages = self.build_urban_embeds(results, word)
-        paginator = PaginatorView(pages, loop=True)
+        paginator = PaginatorView(pages, author=ctx.author, loop=True)
         await paginator.send(ctx)
 
     @commands.command()
@@ -93,10 +93,12 @@ class Define(commands.Cog):
                         results = await self.get_urban_definitions(word)
                         if results:
                             embeds = self.build_urban_embeds(results, word)
-                            paginator = PaginatorView(embeds, loop=True)
+                            paginator = PaginatorView(
+                                embeds, author=ctx.author, loop=True
+                            )
                             await paginator.send(ctx)
                             return
-                        
+
                         else:
                             await ctx.send(
                                 f"Could not find the definition for **{word}**."
@@ -140,7 +142,7 @@ class Define(commands.Cog):
                             paginator = PaginatorView(embeds, loop=True)
                             await paginator.send(ctx)
                             return
-                        
+
                         else:
                             await ctx.send(
                                 f"Could not find the definition for **{word}**."
