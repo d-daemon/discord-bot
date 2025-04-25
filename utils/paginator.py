@@ -12,6 +12,13 @@ class PaginatorView(View):
         self.loop = loop
         self.message = None
 
+    async def on_timeout(self):
+        if self.message:
+            try:
+                await self.message.edit(view=None)
+            except discord.NotFound:
+                pass
+
     async def send(self, ctx):
         self.update_buttons()
         self.message = await ctx.send(embed=self.pages[self.index], view=self)
