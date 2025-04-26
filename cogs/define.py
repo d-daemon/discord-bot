@@ -26,16 +26,16 @@ class Define(commands.Cog):
                 title=f"Definition of {word}", color=discord.Color.green()
             )
 
-            for part_of_speech, definitions in results.items():
-                if not definitions:
-                    continue
-                embed.add_field(
-                    name=part_of_speech,
-                    value="\n".join(
-                        [f"{i + 1}. {d}" for i, d in enumerate(definitions)]
-                    ),
-                    inline=False,
-                )
+            if isinstance(results, tuple) and len(results) > 0:
+                definitions = results[0]
+                if definitions:
+                    embed.add_field(
+                        name="Definition",
+                        value="\n".join(
+                            [f"{i + 1}. {d}" for i, d in enumerate(definitions)]
+                        ),
+                        inline=False,
+                    )
 
             embed.set_footer(text="Source: Merriam-Webster (PyMultiDictionary)")
             return embed
@@ -100,9 +100,7 @@ class Define(commands.Cog):
                         results = await self.get_urban_definitions(word)
                         if results:
                             embeds = self.build_urban_embeds(results, word)
-                            paginator = PaginatorView(
-                                embeds, author=ctx.author, loop=True
-                            )
+                            paginator = PaginatorView(embeds, author=ctx.author, loop=True)
                             await paginator.send(ctx)
                             return
 
@@ -146,7 +144,7 @@ class Define(commands.Cog):
                         results = await self.get_urban_definitions(word)
                         if results:
                             embeds = self.build_urban_embeds(results, word)
-                            paginator = PaginatorView(embeds, loop=True)
+                            paginator = PaginatorView(embeds, author=ctx.author, loop=True)
                             await paginator.send(ctx)
                             return
 
