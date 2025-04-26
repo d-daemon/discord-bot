@@ -1,15 +1,21 @@
+import aiohttp
 import discord
 from discord.ext import commands
-import aiohttp
-from utils.paginator import PaginatorView
-from PyMultiDictionary import MultiDictionary, DICT_MW
+from PyMultiDictionary import DICT_MW, MultiDictionary
 
+from utils.paginator import PaginatorView
 
 class Define(commands.Cog):
+    """A cog that provides word definition functionality.
+    
+    This cog allows users to look up definitions of words from multiple sources,
+    including Dictionary API, Merriam-Webster, and Urban Dictionary.
+    """
     def __init__(self, bot):
         self.bot = bot
 
     def get_mw_fallback_embed(self, word: str) -> discord.Embed | None:
+        """Get the definition of a word from Merriam-Webster"""
         md = MultiDictionary()
         try:
             results = md.meaning("en", word, dictionary=DICT_MW)
@@ -50,6 +56,7 @@ class Define(commands.Cog):
                     return None
 
     def build_urban_embeds(self, results: list, word: str) -> list[discord.Embed]:
+        """Build Urban Dictionary embeds"""
         pages = []
         for i, entry in enumerate(results):
             embed = discord.Embed(
