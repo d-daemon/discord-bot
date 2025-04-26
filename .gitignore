@@ -167,4 +167,7 @@ FolderHierarchy.md
 .gitignore
 config/config.json
 .DS_Store
-.gitignore
+
+data/
+postgresql/
+.idea/
