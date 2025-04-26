@@ -1,13 +1,18 @@
 import re
-import discord
-from discord.ext import commands
-import aiohttp
 from decimal import Decimal, InvalidOperation
 
-# NOTE: ISO 4217 Currencies: https://en.wikipedia.org/wiki/ISO_4217
+import aiohttp
+import discord
+from discord.ext import commands
+
+# For reference: ISO 4217 Currencies: https://en.wikipedia.org/wiki/ISO_4217
 
 class CurrencyConverter(commands.Cog):
-    """Currency Converter"""
+    """A cog that provides currency conversion functionality.
+    
+    This cog allows users to convert between different currencies using real-time exchange rates.
+    It supports various international number formats and displays results in a grid.
+    """
     def __init__(self, bot):
         self.bot = bot
         self.default_currencies = [
@@ -46,7 +51,7 @@ class CurrencyConverter(commands.Cog):
 
     @commands.command(name="fx")
     async def convert_command(self, ctx, *, args: str):
-        # Parse the command arguments using regex
+        """Convert currency"""
         match = re.match(
             r'^(\d+(?:[.,]\d{3})*(?:[.,]\d+)?)\s+([A-Za-z]{3})(?:\s+to\s+([A-Za-z]{3}))?$',
             args.strip(),
