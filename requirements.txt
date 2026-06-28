@@ -1,6 +1,5 @@
 discord.py
-instaloader
-pytube
+gallery-dl
 yt-dlp
 asyncpg
 deep_translator

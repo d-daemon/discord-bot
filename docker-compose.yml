@@ -1,7 +1,7 @@
 version: '3.8'
 services:
   postgresql:
-    image: postgres:latest
+    image: postgres:17
     container_name: postgresql
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -41,6 +41,7 @@ services:
     environment:
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
       DATABASE_URL: ${DATABASE_URL}
+      INSTAGRAM_COOKIES: ${INSTAGRAM_COOKIES}
     volumes:
       - ./config:/app/config
       - ./data:/app/data

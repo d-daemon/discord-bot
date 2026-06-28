@@ -1,113 +1,271 @@
 import json
 import logging
 import os
+import shutil
+import subprocess
+import tempfile
 from datetime import datetime
+from pathlib import Path
 
 import discord
-import instaloader
 from discord import app_commands
 from discord.ext import commands
-from pytube import YouTube
-from yt_dlp import YoutubeDL
-from utils.helpers import get_random_user_agent, do_sleep
 
-def unique_filename(directory):
+from utils.helpers import do_sleep
+from yt_dlp import YoutubeDL
+
+
+def unique_directory(directory):
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    path = os.path.join(directory, current_time)
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def unique_filename(directory, source_path=None):
+    extension = Path(source_path).suffix if source_path else ".mp4"
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return os.path.join(directory, f"{current_time}.mp4")
+    return os.path.join(directory, f"{current_time}{extension}")
+
 
 def load_config():
-    with open('/app/config/config.json', 'r') as config_file:
+    config_path = os.environ.get("BOT_CONFIG_PATH", "/app/config/config.json")
+    if not os.path.exists(config_path):
+        return {}
+    with open(config_path, "r", encoding="utf-8") as config_file:
         return json.load(config_file)
 
-def download_instagram_video(post_url, download_dir):
-    L = instaloader.Instaloader(
-        dirname_pattern=download_dir, 
-        filename_pattern="{shortcode}", 
-        save_metadata=False,
-        user_agent=get_random_user_agent()
-        )
-    L.download_comments = False
-    shortcode = post_url.split('/')[-2]
 
-    # Sleep before making the request to get post information
-    do_sleep()
-    post = instaloader.Post.from_shortcode(L.context, shortcode)
-    
-    # Sleep before downloading the post
-    do_sleep()
-    L.download_post(post, target=download_dir)
+def build_gallery_dl_command(url, download_dir, is_instagram=False):
+    command = ["gallery-dl", "-d", str(download_dir)]
+    cookie_file = None
 
-    video_files = [f for f in os.listdir(download_dir) if f.endswith('.mp4')]
-    if not video_files:
+    if is_instagram:
+        cookies = os.environ.get("INSTAGRAM_COOKIES", "").strip()
+        if cookies:
+            cookie_file = write_instagram_cookie_file(cookies)
+            if cookie_file:
+                command.extend(["--cookies", cookie_file])
+
+    command.append(url)
+    return command, cookie_file
+
+
+def write_instagram_cookie_file(cookie_value):
+    if not cookie_value:
+        return None
+
+    cookie_pairs = []
+    if "=" in cookie_value:
+        for part in cookie_value.replace("&", ";").split(";"):
+            if "=" in part:
+                name, value = part.split("=", 1)
+                cookie_pairs.append((name.strip(), value.strip()))
+
+    if not cookie_pairs:
+        cookie_pairs = [("sessionid", cookie_value)]
+
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as handle:
+        handle.write("# Netscape HTTP Cookie File\n")
+        for name, value in cookie_pairs:
+            handle.write(f".instagram.com\tTRUE\t/\tFALSE\t0\t{name}\t{value}\n")
+            handle.write(f"www.instagram.com\tTRUE\t/\tFALSE\t0\t{name}\t{value}\n")
+        return handle.name
+
+
+DISCORD_MAX_ATTACHMENT_SIZE = 6 * 1024 * 1024
+
+
+def build_ffmpeg_command(input_path, output_path):
+    return [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(input_path),
+        "-vf",
+        "scale=854:trunc(ow/a/2)*2:flags=lanczos,fps=20",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "32",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "96k",
+        "-movflags",
+        "+faststart",
+        str(output_path),
+    ]
+
+
+def compress_video_for_discord(video_path):
+    if not shutil.which("ffmpeg"):
+        raise RuntimeError("ffmpeg is not installed or not available on PATH.")
+
+    output_path = str(Path(video_path).with_suffix(".compressed.mp4"))
+    completed = subprocess.run(
+        build_ffmpeg_command(video_path, output_path),
+        capture_output=True,
+        text=True,
+        timeout=600,
+        check=False,
+    )
+    if completed.returncode != 0:
+        stderr = (completed.stderr or completed.stdout).strip()
+        raise RuntimeError(stderr or "Failed to compress the video for Discord.")
+
+    if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+        os.remove(video_path)
+        return output_path
+
+    raise RuntimeError("Compressed video was not created.")
+
+
+def find_downloaded_media(download_dir):
+    download_path = Path(download_dir)
+    if not download_path.exists():
+        return []
+
+    video_extensions = {".mp4", ".webm", ".mkv", ".mov", ".avi", ".m4v"}
+    video_files = [
+        path for path in download_path.rglob("*") if path.is_file() and path.suffix.lower() in video_extensions
+    ]
+    if video_files:
+        return sorted(video_files)
+    return sorted(path for path in download_path.rglob("*") if path.is_file())
+
+
+def download_via_gallery_dl(video_url, download_dir, is_instagram=False):
+    do_sleep()
+    os.makedirs(download_dir, exist_ok=True)
+    target_dir = unique_directory(download_dir)
+
+    command, cookie_file = build_gallery_dl_command(video_url, target_dir, is_instagram=is_instagram)
+    gallery_dl = shutil.which("gallery-dl")
+    if not gallery_dl:
+        raise RuntimeError("gallery-dl is not installed or not available on PATH.")
+
+    try:
+        completed = subprocess.run(command, capture_output=True, text=True, timeout=600, check=False)
+        if completed.returncode != 0:
+            stderr = (completed.stderr or completed.stdout).strip()
+            raise RuntimeError(stderr or "gallery-dl failed to download the media.")
+
+        downloaded_media = find_downloaded_media(target_dir)
+        if not downloaded_media:
+            raise FileNotFoundError("No video file found in the downloaded files!")
+
+        media_path = downloaded_media[0]
+        final_path = unique_filename(download_dir, media_path)
+        os.replace(media_path, final_path)
+
+        for path in Path(target_dir).iterdir():
+            if path.is_file():
+                path.unlink()
+        try:
+            os.rmdir(target_dir)
+        except OSError:
+            pass
+
+        return final_path
+    finally:
+        if cookie_file and os.path.exists(cookie_file):
+            os.remove(cookie_file)
+
+    downloaded_media = find_downloaded_media(target_dir)
+    if not downloaded_media:
         raise FileNotFoundError("No video file found in the downloaded files!")
-    video_path = os.path.join(download_dir, video_files[0])
-    new_video_path = unique_filename(download_dir)
-    os.rename(video_path, new_video_path)
-    return new_video_path
+
+    media_path = downloaded_media[0]
+    final_path = unique_filename(download_dir, media_path)
+    os.replace(media_path, final_path)
+
+    for path in Path(target_dir).iterdir():
+        if path.is_file():
+            path.unlink()
+    try:
+        os.rmdir(target_dir)
+    except OSError:
+        pass
+
+    return final_path
+
+
+def download_instagram_video(post_url, download_dir):
+    return download_via_gallery_dl(post_url, download_dir, is_instagram=True)
+
 
 def download_youtube_video(video_url, download_dir):
-    """Download YouTube videos"""
-    # Sleep before getting video information
-    do_sleep()
-    yt = YouTube(video_url, on_progress_callback=None)
-    stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
-    
-    # Sleep before downloading the video
-    do_sleep()
-    output_path = stream.download(output_path=download_dir)
+    return download_with_ytdlp(video_url, download_dir)
 
-    new_video_path = unique_filename(download_dir)
-    os.rename(output_path, new_video_path)
-    return new_video_path
-
-def get_ytdlp_opts(output_template):
-    """Get common yt-dlp options with a random User-Agent."""
-    return {
-        'outtmpl': output_template,
-        'format': 'best',
-        'before_download': lambda _: do_sleep(),  # Sleep before each download
-        'quiet': True,
-        'no_warnings': True
-    }
-
-def download_with_ytdlp(video_url, download_dir):
-    do_sleep()
-    output_template = unique_filename(download_dir)
-    ydl_opts = get_ytdlp_opts(output_template)
-    with YoutubeDL(ydl_opts) as ydl:
-        ydl.extract_info(video_url, download=True)
-    return output_template
 
 def download_tiktok_video(video_url, download_dir):
     do_sleep()
-    output_template = unique_filename(download_dir)
-    ydl_opts = get_ytdlp_opts(output_template)
+    os.makedirs(download_dir, exist_ok=True)
+    output_path = unique_filename(download_dir)
+    ydl_opts = {
+        "outtmpl": output_path,
+        "format": "bestvideo+bestaudio/best",
+        "quiet": True,
+        "no_warnings": True,
+        "merge_output_format": "mp4",
+        "socket_timeout": 30,
+        "retries": 10,
+        "extractor_retries": 10,
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        },
+    }
     with YoutubeDL(ydl_opts) as ydl:
         ydl.extract_info(video_url, download=True)
-    return output_template
+
+    if not os.path.exists(output_path) and os.path.exists(output_path + ".mp4"):
+        output_path += ".mp4"
+
+    if not os.path.exists(output_path):
+        raise FileNotFoundError("No video file found in the downloaded files!")
+
+    return output_path
+
 
 def download_facebook_reel(video_url, download_dir):
-    do_sleep()
-    output_template = unique_filename(download_dir)
-    ydl_opts = get_ytdlp_opts(output_template)
-    with YoutubeDL(ydl_opts) as ydl:
-        ydl.extract_info(video_url, download=True)
-    return output_template
+    return download_with_ytdlp(video_url, download_dir)
+
 
 def download_youtube_short(video_url, download_dir):
+    return download_with_ytdlp(video_url, download_dir)
+
+
+def download_with_ytdlp(video_url, download_dir):
     do_sleep()
-    output_template = unique_filename(download_dir)
-    ydl_opts = get_ytdlp_opts(output_template)
+    os.makedirs(download_dir, exist_ok=True)
+    output_path = unique_filename(download_dir)
+    ydl_opts = {
+        "outtmpl": output_path,
+        "format": "bestvideo+bestaudio/best",
+        "quiet": True,
+        "no_warnings": True,
+        "merge_output_format": "mp4",
+    }
     with YoutubeDL(ydl_opts) as ydl:
         ydl.extract_info(video_url, download=True)
-    return output_template
+
+    if not os.path.exists(output_path) and os.path.exists(output_path + ".mp4"):
+        output_path += ".mp4"
+
+    if not os.path.exists(output_path):
+        raise FileNotFoundError("No video file found in the downloaded files!")
+
+    return output_path
+
 
 class VideoDownload(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.download_dir = "/app/data/DL-Output"
-        if not os.path.exists(self.download_dir):
-            os.makedirs(self.download_dir)
+        self.download_dir = os.environ.get("VIDEO_DOWNLOAD_DIR", "/app/data/DL-Output")
+        os.makedirs(self.download_dir, exist_ok=True)
 
     async def setup(self):
         logging.info("Fetching guild IDs for VideoDownload cog.")
@@ -129,7 +287,6 @@ class VideoDownload(commands.Cog):
         app_commands.Choice(name='Instagram', value='instagram'),
         app_commands.Choice(name='TikTok', value='tiktok'),
         app_commands.Choice(name='Twitter', value='twitter'),
-        app_commands.Choice(name='Vimeo', value='vimeo'),
         app_commands.Choice(name='YouTube', value='youtube'),
         app_commands.Choice(name='YouTube Shorts', value='youtube_short')])
     async def download_video(self, interaction: discord.Interaction, platform: app_commands.Choice[str], url: str):
@@ -149,11 +306,26 @@ class VideoDownload(commands.Cog):
             else:
                 video_path = download_with_ytdlp(url, self.download_dir)
 
-            # Check file size
             file_size = os.path.getsize(video_path)
-            if file_size > 25 * 1024 * 1024:  # 25 MB limit
+            if file_size > DISCORD_MAX_ATTACHMENT_SIZE:
+                try:
+                    compressed_path = compress_video_for_discord(video_path)
+                    video_path = compressed_path
+                    file_size = os.path.getsize(video_path)
+                except Exception as compression_error:
+                    os.remove(video_path)
+                    await interaction.followup.send(
+                        f"The downloaded video is too large to send to Discord and compression failed: {compression_error}",
+                        ephemeral=True,
+                    )
+                    return
+
+            if file_size > DISCORD_MAX_ATTACHMENT_SIZE:
                 os.remove(video_path)
-                await interaction.followup.send("The downloaded video exceeds the 25 MB size limit.", ephemeral=True)
+                await interaction.followup.send(
+                    f"The downloaded video is still too large to send to Discord ({file_size / (1024 * 1024):.1f} MB). Please try a smaller clip.",
+                    ephemeral=True,
+                )
                 return
 
             self.config = load_config()
@@ -161,9 +333,8 @@ class VideoDownload(commands.Cog):
             await interaction.channel.send(f"{interaction.user.mention} Here is your downloaded video:", file=file)
             os.remove(video_path)
 
-            # Remove all other files
-            for f in os.listdir(self.download_dir):
-                file_path = os.path.join(self.download_dir, f)
+            for entry in os.listdir(self.download_dir):
+                file_path = os.path.join(self.download_dir, entry)
                 if os.path.isfile(file_path):
                     os.remove(file_path)
 
@@ -171,6 +342,7 @@ class VideoDownload(commands.Cog):
         except Exception as e:
             logging.exception("Failed to download or send the video")
             await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
+
 
 async def setup(bot):
     cog = VideoDownload(bot)
