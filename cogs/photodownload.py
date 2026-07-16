@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 from datetime import datetime
 
 import discord
@@ -8,6 +9,17 @@ import instaloader
 from discord import app_commands
 from discord.ext import commands
 from utils.helpers import get_random_user_agent, do_sleep
+
+
+def extract_instagram_shortcode(post_url):
+    """Extract shortcode from Instagram post/reel URLs or accept raw shortcode."""
+    post_url = post_url.strip()
+    match = re.search(r"instagram\.com/(?:p|reel|tv)/(?P<shortcode>[A-Za-z0-9_-]+)", post_url)
+    if match:
+        return match.group('shortcode')
+    if '/' not in post_url and post_url:
+        return post_url
+    raise ValueError("Could not extract the Instagram shortcode from the URL. Use a URL like https://www.instagram.com/p/shortcode/ or provide the shortcode directly.")
 
 
 def unique_filename(directory, base_name, index):
@@ -26,7 +38,7 @@ def download_instagram_photos(post_url, download_dir):
         user_agent=get_random_user_agent()
         )
     L.download_comments = False
-    shortcode = post_url.split('/')[-2]
+    shortcode = extract_instagram_shortcode(post_url)
 
     do_sleep()
     post = instaloader.Post.from_shortcode(L.context, shortcode)

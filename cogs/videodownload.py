@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 from datetime import datetime
 
 import discord
@@ -15,9 +16,24 @@ def unique_filename(directory):
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     return os.path.join(directory, f"{current_time}.mp4")
 
+def get_ytdlp_output_template(directory):
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return os.path.join(directory, f"{current_time}.%(ext)s")
+
+
 def load_config():
     with open('/app/config/config.json', 'r') as config_file:
         return json.load(config_file)
+
+def extract_instagram_shortcode(post_url):
+    """Extract shortcode from Instagram post/reel URLs or accept raw shortcode."""
+    post_url = post_url.strip()
+    match = re.search(r"instagram\.com/(?:p|reel|tv)/(?P<shortcode>[A-Za-z0-9_-]+)(?:[/?].*)?$", post_url)
+    if match:
+        return match.group('shortcode')
+    if '/' not in post_url and post_url:
+        return post_url
+    raise ValueError("Could not extract the Instagram shortcode from the URL. Use a URL like https://www.instagram.com/p/shortcode/ or provide the shortcode directly.")
 
 def download_instagram_video(post_url, download_dir):
     L = instaloader.Instaloader(
@@ -27,15 +43,20 @@ def download_instagram_video(post_url, download_dir):
         user_agent=get_random_user_agent()
         )
     L.download_comments = False
-    shortcode = post_url.split('/')[-2]
+    shortcode = extract_instagram_shortcode(post_url)
 
-    # Sleep before making the request to get post information
-    do_sleep()
-    post = instaloader.Post.from_shortcode(L.context, shortcode)
-    
-    # Sleep before downloading the post
-    do_sleep()
-    L.download_post(post, target=download_dir)
+    try:
+        # Sleep before making the request to get post information
+        do_sleep()
+        post = instaloader.Post.from_shortcode(L.context, shortcode)
+
+        # Sleep before downloading the post
+        do_sleep()
+        L.download_post(post, target=download_dir)
+    except instaloader.exceptions.InstaloaderException as error:
+        logging.warning("Instaloader metadata fetch failed for Instagram URL %s: %s", post_url, error)
+        logging.info("Falling back to yt-dlp for Instagram download")
+        return download_with_ytdlp(post_url, download_dir)
 
     video_files = [f for f in os.listdir(download_dir) if f.endswith('.mp4')]
     if not video_files:
@@ -64,7 +85,8 @@ def get_ytdlp_opts(output_template):
     """Get common yt-dlp options with a random User-Agent."""
     return {
         'outtmpl': output_template,
-        'format': 'best',
+        'format': 'bestvideo+bestaudio/best',
+        'merge_output_format': 'mp4',
         'before_download': lambda _: do_sleep(),  # Sleep before each download
         'quiet': True,
         'no_warnings': True
@@ -72,11 +94,18 @@ def get_ytdlp_opts(output_template):
 
 def download_with_ytdlp(video_url, download_dir):
     do_sleep()
-    output_template = unique_filename(download_dir)
+    output_template = get_ytdlp_output_template(download_dir)
     ydl_opts = get_ytdlp_opts(output_template)
     with YoutubeDL(ydl_opts) as ydl:
-        ydl.extract_info(video_url, download=True)
-    return output_template
+        info = ydl.extract_info(video_url, download=True)
+
+    if isinstance(info, dict) and 'ext' in info:
+        return output_template.replace('%(ext)s', info['ext'])
+
+    downloaded_files = [f for f in os.listdir(download_dir) if os.path.isfile(os.path.join(download_dir, f))]
+    if not downloaded_files:
+        raise FileNotFoundError("yt-dlp did not produce a downloaded video file")
+    return os.path.join(download_dir, downloaded_files[-1])
 
 def download_tiktok_video(video_url, download_dir):
     do_sleep()
