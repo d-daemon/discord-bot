@@ -14,6 +14,31 @@ def unique_filename(directory, base_name, index):
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     return os.path.join(directory, f"{base_name}_{current_time}_{index}.jpg")
 
+def apply_instagram_cookies_to_instaloader(loader, cookie_value: str):
+    """Apply Instagram cookies (from env) to an Instaloader instance's requests session.
+
+    Accepts cookie strings like `sessionid=...; csrftoken=...` or a raw sessionid value.
+    """
+    if not cookie_value:
+        return
+
+    cookie_pairs = []
+    if "=" in cookie_value:
+        for part in cookie_value.replace("&", ";").split(";"):
+            if "=" in part:
+                name, value = part.split("=", 1)
+                cookie_pairs.append((name.strip(), value.strip()))
+
+    if not cookie_pairs:
+        cookie_pairs = [("sessionid", cookie_value)]
+
+    try:
+        sess = loader.context._session
+        for name, value in cookie_pairs:
+            sess.cookies.set(name, value, domain=".instagram.com", path="/")
+    except Exception:
+        logging.exception("Failed to apply Instagram cookies to Instaloader session")
+
 def load_config():
     # TODO: Avoid hardcoding the config path; use `BOT_CONFIG_PATH` env
     # variable or the project's `load_config()` helper for consistency.
@@ -29,6 +54,12 @@ def download_instagram_photos(post_url, download_dir):
         )
     L.download_comments = False
     shortcode = post_url.split('/')[-2]
+
+    # Apply INSTAGRAM_COOKIES if provided in the environment so Instaloader
+    # can access media that requires an authenticated session.
+    cookies = os.environ.get("INSTAGRAM_COOKIES", "").strip()
+    if cookies:
+        apply_instagram_cookies_to_instaloader(L, cookies)
 
     # TODO: `do_sleep()` blocks the event loop; either make it async or run
     # this function in a thread to avoid blocking when called from commands.

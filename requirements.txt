@@ -8,3 +8,5 @@ python-dateutil
 aiohttp
 deep-translator
 pymultidictionary
+instaloader
+fake-useragent

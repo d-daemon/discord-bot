@@ -30,8 +30,20 @@ USER_AGENTS = [
 ]
 
 def get_random_user_agent():
-    """Returns a random User-Agent from the list."""
-    return random.choice(USER_AGENTS)
+    """Return a random User-Agent.
+
+    Tries to use the `fake_useragent` library to produce a more realistic
+    and frequently-updated user-agent string. If the library is not
+    available or fails (no network, etc.), falls back to the bundled
+    `USER_AGENTS` list.
+    """
+    try:
+        from fake_useragent import UserAgent
+        ua = UserAgent()
+        return ua.random
+    except Exception:
+        logging.debug("fake_useragent unavailable or failed, using fallback list")
+        return random.choice(USER_AGENTS)
 
 def do_sleep():
     """Sleep a short time between requests to avoid rate limiting.
