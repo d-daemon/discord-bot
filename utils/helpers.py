@@ -34,7 +34,13 @@ def get_random_user_agent():
     return random.choice(USER_AGENTS)
 
 def do_sleep():
-    """Sleep a short time between requests to avoid rate limiting."""
+    """Sleep a short time between requests to avoid rate limiting.
+
+    TODO: This function blocks the thread with `time.sleep()` and will block
+    the asyncio event loop when called from async code. Consider replacing
+    with an `async def do_sleep_async()` that uses `await asyncio.sleep()` or
+    run callers in a thread via `asyncio.to_thread()` to avoid freezing the bot.
+    """
     sleep_time = min(random.expovariate(0.10), 25.0)
     if sleep_time < 5:  # minimum time to sleep
         sleep_time = 5

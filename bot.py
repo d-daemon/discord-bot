@@ -83,6 +83,9 @@ class MyBot(commands.Bot):
                     logger.info("Database connection established successfully")
                 return
             except Exception as e:
+                # TODO: Catch more specific connection/timeout exceptions instead
+                # of a broad `Exception`. Use `logging.exception` where appropriate
+                # to include tracebacks for debugging.
                 logger.warning(f"Database connection attempt {attempt + 1} failed: {e}")
                 if attempt < max_retries - 1:
                     await asyncio.sleep(retry_delay)
@@ -122,20 +125,17 @@ class MyBot(commands.Bot):
         try:
             # Initialize database
             await self.init_database()
-            
+
             # Cache guild IDs
             await self.cache_guild_ids()
-            
+
             # Load cogs
             await self.load_all_cogs()
-            
-            # Sync commands
-            await self.sync_all_commands()
-            
-            # Apply personalization
-            await self.apply_personalization_settings()
-            
+
         except Exception as e:
+            # TODO: Consider handling known setup failures explicitly and
+            # avoid broad exception swallowing. Use `logging.exception` to
+            # capture tracebacks for later debugging.
             logger.error(f"Failed to complete setup: {e}")
             raise
 
@@ -165,6 +165,8 @@ class MyBot(commands.Bot):
             await self.execute_db_operation(create_tables)
             logger.info("Database initialization complete")
         except Exception as e:
+            # TODO: Narrow the exception types here (e.g., asyncpg errors)
+            # and log the full traceback using `logging.exception`.
             logger.error(f"Database initialization failed: {e}")
             raise
 
@@ -189,6 +191,8 @@ class MyBot(commands.Bot):
             
             logger.info(f"Cached {len(self.guild_ids)} guild IDs")
         except Exception as e:
+            # TODO: Replace broad exception handling with targeted catches
+            # and consider recovering partial failures when possible.
             logger.error(f"Failed to cache guild IDs: {e}")
             raise
 
@@ -246,6 +250,9 @@ class MyBot(commands.Bot):
 
             logger.info("Applied global personalization settings")
         except Exception as e:
+            # TODO: When iterating settings, handle expected errors per key
+            # (e.g., base64 decode errors) and avoid one setting failure
+            # blocking others. Use `logging.exception` for full tracebacks.
             logger.error(f"Failed to apply personalization settings: {e}")
 
 
@@ -270,6 +277,8 @@ class MyBot(commands.Bot):
                         except Exception as e:
                             logger.error(f"Failed to set nickname in guild {guild.name}: {e}")
         except Exception as e:
+            # TODO: Consider more granular error handling (db access vs
+            # permission errors) and use `logging.exception` where useful.
             logger.error(f"Failed to apply server nicknames: {e}")
 
     async def load_all_cogs(self) -> None:
@@ -283,6 +292,8 @@ class MyBot(commands.Bot):
                     await self.load_extension(cog_name)
                     logger.info(f"Loaded cog: {cog_name}")
                 except Exception as e:
+                    # TODO: Narrow exception types when loading extensions and
+                    # include tracebacks with `logging.exception` to help debugging.
                     logger.error(f"Failed to load cog {cog_name}: {e}")
 
     async def sync_all_commands(self) -> None:
@@ -292,14 +303,23 @@ class MyBot(commands.Bot):
         try:
             # Sync global commands
             await self.tree.sync()
-            
-            # Sync guild-specific commands
-            for guild_id in self.guild_ids:
-                await self.tree.sync(guild=discord.Object(id=guild_id))
-            
-            logger.info("Command synchronization complete")
         except Exception as e:
-            logger.error(f"Command synchronization failed: {e}")
+            # TODO: Be specific about which errors are expected (network,
+            # rate-limit, permission) and avoid broad catches hiding issues.
+            logger.error(f"Global command synchronization failed: {e}")
+
+        # Sync guild-specific commands individually to avoid one failure blocking others
+        for guild_id in self.guild_ids:
+            try:
+                await self.tree.sync(guild=discord.Object(id=guild_id))
+            except discord.Forbidden:
+                logger.warning(f"Skipping command sync for guild {guild_id}: Missing access")
+            except Exception as e:
+                # TODO: Use targeted exception handling and `logging.exception`
+                # for unexpected failures when syncing per-guild commands.
+                logger.error(f"Failed to sync commands for guild {guild_id}: {e}")
+
+        logger.info("Command synchronization complete")
 
     async def add_guild_to_db(self, guild_id: int) -> None:
         """
@@ -318,6 +338,8 @@ class MyBot(commands.Bot):
                     self.guild_ids.append(guild_id)
                 logger.info(f"Added guild {guild_id} to database")
         except Exception as e:
+            # TODO: Log the stacktrace for DB operation failures and consider
+            # retrying transient errors instead of swallowing them.
             logger.error(f"Failed to add guild {guild_id}: {e}")
 
     async def remove_guild_from_db(self, guild_id: int) -> None:
@@ -335,6 +357,8 @@ class MyBot(commands.Bot):
                     self.guild_ids.remove(guild_id)
                 logger.info(f"Removed guild {guild_id} from database")
         except Exception as e:
+            # TODO: Avoid catching all exceptions broadly; distinguish
+            # database vs file/logic errors and log tracebacks.
             logger.error(f"Failed to remove guild {guild_id}: {e}")
 
     async def on_guild_join(self, guild: discord.Guild) -> None:
@@ -363,9 +387,13 @@ class MyBot(commands.Bot):
         Handles the bot's ready event.
         """
         logger.info(f'Logged in as {self.user.name}')
+        # Ensure cached guilds and nicknames are applied after the websocket is ready
         await self.cache_guild_ids()
         await self.apply_server_nicknames()
+
+        # Sync commands and apply personalization now that the connection is established
         await self.sync_all_commands()
+        await self.apply_personalization_settings()
 
     async def start_bot(self) -> None:
         """
@@ -374,6 +402,8 @@ class MyBot(commands.Bot):
         try:
             await self.start(self.token)
         except Exception as e:
+            # TODO: Consider catching specific startup exceptions and
+            # logging the full traceback using `logging.exception`.
             logger.error(f"Failed to start bot: {e}")
             raise
 

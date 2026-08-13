@@ -41,6 +41,9 @@ class Define(commands.Cog):
             return embed
 
         except Exception as e:
+            # TODO: Replace `print` with `logging.exception(...)` and narrow
+            # the exception type where possible so errors are consistently
+            # recorded and don't leak to stdout. Example: `logging.exception("MW Error")`
             print(f"**MW Error:** {e}")
             return None
 
