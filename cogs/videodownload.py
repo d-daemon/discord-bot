@@ -23,6 +23,9 @@ def unique_directory(directory):
 
 
 def unique_filename(directory, source_path=None):
+    # TODO: current implementation uses second-resolution timestamps which
+    # can collide if multiple files are created in the same second. Consider
+    # including microseconds ("%f") or using a UUID to guarantee uniqueness.
     extension = Path(source_path).suffix if source_path else ".mp4"
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     return os.path.join(directory, f"{current_time}{extension}")
@@ -83,13 +86,19 @@ def build_ffmpeg_command(input_path, output_path):
         "-i",
         str(input_path),
         "-vf",
-        "scale=854:trunc(ow/a/2)*2:flags=lanczos,fps=20",
+        "scale=854:trunc(ow/a/2)*2,fps=30",
         "-c:v",
         "libx264",
         "-preset",
         "veryfast",
         "-crf",
-        "32",
+        "28",
+        "-profile:v",
+        "main",
+        "-level",
+        "3.1",
+        "-pix_fmt",
+        "yuv420p",
         "-c:a",
         "aac",
         "-b:a",
@@ -101,6 +110,9 @@ def build_ffmpeg_command(input_path, output_path):
 
 
 def compress_video_for_discord(video_path):
+    # TODO: `subprocess.run` is blocking. Run ffmpeg in a thread via
+    # `asyncio.to_thread()` or use `asyncio.create_subprocess_exec` when
+    # called from async code to avoid blocking the event loop.
     if not shutil.which("ffmpeg"):
         raise RuntimeError("ffmpeg is not installed or not available on PATH.")
 
@@ -138,16 +150,24 @@ def find_downloaded_media(download_dir):
 
 
 def download_via_gallery_dl(video_url, download_dir, is_instagram=False):
+    # TODO: `do_sleep()` blocks the thread. Either make it async or call
+    # this function inside `asyncio.to_thread()` so the bot's event loop
+    # is not blocked by sleeps between downloads.
     do_sleep()
     os.makedirs(download_dir, exist_ok=True)
     target_dir = unique_directory(download_dir)
 
     command, cookie_file = build_gallery_dl_command(video_url, target_dir, is_instagram=is_instagram)
     gallery_dl = shutil.which("gallery-dl")
+    # TODO: we detect `gallery-dl` with `shutil.which()` but we don't use
+    # the absolute path when building the command. Consider replacing
+    # the command[0] with `gallery_dl` to avoid PATH inconsistencies.
     if not gallery_dl:
         raise RuntimeError("gallery-dl is not installed or not available on PATH.")
 
     try:
+        # TODO: `subprocess.run` is blocking; run in a thread to avoid
+        # blocking the async event loop (e.g., `await asyncio.to_thread(subprocess.run, ...)`).
         completed = subprocess.run(command, capture_output=True, text=True, timeout=600, check=False)
         if completed.returncode != 0:
             stderr = (completed.stderr or completed.stdout).strip()
@@ -174,23 +194,9 @@ def download_via_gallery_dl(video_url, download_dir, is_instagram=False):
         if cookie_file and os.path.exists(cookie_file):
             os.remove(cookie_file)
 
-    downloaded_media = find_downloaded_media(target_dir)
-    if not downloaded_media:
-        raise FileNotFoundError("No video file found in the downloaded files!")
-
-    media_path = downloaded_media[0]
-    final_path = unique_filename(download_dir, media_path)
-    os.replace(media_path, final_path)
-
-    for path in Path(target_dir).iterdir():
-        if path.is_file():
-            path.unlink()
-    try:
-        os.rmdir(target_dir)
-    except OSError:
-        pass
-
-    return final_path
+    # NOTE: the code below was duplicated earlier; keep cleanup centralized
+    # above in the try/finally and return the final path there. Consider
+    # refactoring to ensure a single return/cleanup path.
 
 
 def download_instagram_video(post_url, download_dir):
@@ -202,6 +208,7 @@ def download_youtube_video(video_url, download_dir):
 
 
 def download_tiktok_video(video_url, download_dir):
+    # TODO: blocking `do_sleep()` call — see utils.helpers note.
     do_sleep()
     os.makedirs(download_dir, exist_ok=True)
     output_path = unique_filename(download_dir)
@@ -239,6 +246,9 @@ def download_youtube_short(video_url, download_dir):
 
 
 def download_with_ytdlp(video_url, download_dir):
+    # TODO: yt_dlp `extract_info` is blocking (downloads and merges). Run
+    # the extractor in a thread (e.g., `await asyncio.to_thread`) to avoid
+    # blocking the event loop when invoked from async command handlers.
     do_sleep()
     os.makedirs(download_dir, exist_ok=True)
     output_path = unique_filename(download_dir)
