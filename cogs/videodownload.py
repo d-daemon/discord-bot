@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 from datetime import datetime
 from pathlib import Path
+import asyncio
 
 import discord
 from discord import app_commands
@@ -271,6 +272,80 @@ def download_with_ytdlp(video_url, download_dir):
     return output_path
 
 
+def probe_media(file_path: str) -> dict:
+    """Run ffprobe on the given file and return parsed JSON streams info.
+
+    Note: This calls the ffprobe binary synchronously and should be run
+    from a thread (e.g. `await asyncio.to_thread(probe_media, path)`).
+    """
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        raise RuntimeError("ffprobe is not installed or available on PATH")
+
+    cmd = [ffprobe, "-v", "error", "-print_format", "json", "-show_streams", str(file_path)]
+    completed = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if completed.returncode != 0:
+        raise RuntimeError((completed.stderr or completed.stdout).strip() or "ffprobe failed")
+
+    return json.loads(completed.stdout)
+
+
+def needs_reencode(probe_info: dict) -> bool:
+    """Return True if the file should be re-encoded to H264/AAC/yuv420p.
+
+    Criteria:
+      - video codec is not h264
+      - video pixel format is not yuv420p
+      - audio codec is not aac (if an audio stream exists)
+    """
+    streams = probe_info.get("streams", [])
+    video_stream = next((s for s in streams if s.get("codec_type") == "video"), None)
+    audio_stream = next((s for s in streams if s.get("codec_type") == "audio"), None)
+
+    if not video_stream:
+        return True
+
+    vcodec = video_stream.get("codec_name", "").lower()
+    pix_fmt = video_stream.get("pix_fmt", "").lower()
+
+    if vcodec not in ("h264", "avc1"):
+        return True
+
+    if pix_fmt and "yuv420" not in pix_fmt:
+        return True
+
+    if audio_stream:
+        acodec = audio_stream.get("codec_name", "").lower()
+        if acodec not in ("aac", "mp4a"):
+            return True
+
+    return False
+
+
+def reencode_to_h264(input_path: str, output_path: str) -> str:
+    """Re-encode the input to H.264/AAC using ffmpeg and return output path.
+
+    This is a synchronous operation and should be executed in a thread.
+    """
+    if not shutil.which("ffmpeg"):
+        raise RuntimeError("ffmpeg is not installed or not available on PATH.")
+
+    cmd = build_ffmpeg_command(input_path, output_path)
+    completed = subprocess.run(cmd, capture_output=True, text=True, timeout=1200, check=False)
+    if completed.returncode != 0:
+        stderr = (completed.stderr or completed.stdout or "").strip()
+        raise RuntimeError(stderr or "ffmpeg re-encode failed")
+
+    if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+        try:
+            os.remove(input_path)
+        except OSError:
+            pass
+        return output_path
+
+    raise RuntimeError("Re-encoded file not created")
+
+
 class VideoDownload(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -315,6 +390,26 @@ class VideoDownload(commands.Cog):
                 video_path = download_youtube_short(url, self.download_dir)
             else:
                 video_path = download_with_ytdlp(url, self.download_dir)
+
+            # Post-process the downloaded file in a background thread: probe with
+            # ffprobe and re-encode to H.264/AAC/yuv420p when necessary to
+            # improve mobile compatibility (VP9/VP0 can freeze on some devices).
+            try:
+                def _post_process(path):
+                    try:
+                        info = probe_media(path)
+                        if needs_reencode(info):
+                            out_path = str(Path(path).with_suffix('.reencoded.mp4'))
+                            return reencode_to_h264(path, out_path)
+                        return path
+                    except Exception:
+                        # If probing/re-encoding fails, return the original path
+                        logging.exception("Post-process failed for downloaded media")
+                        return path
+
+                video_path = await asyncio.to_thread(_post_process, video_path)
+            except Exception:
+                logging.exception("Failed to run post-processing in background")
 
             file_size = os.path.getsize(video_path)
             if file_size > DISCORD_MAX_ATTACHMENT_SIZE:
