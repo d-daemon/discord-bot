@@ -18,7 +18,7 @@ class CurrencyConverter(commands.Cog):
         self.default_currencies = [
             'cad', 'hkd', 'inr',
             'idr', 'myr', 'sgd',
-            'krw', 'usd'
+            'krw', 'thb', 'usd'
         ]
         self.currency_flags = {
             'cad': '🇨🇦',
@@ -28,6 +28,7 @@ class CurrencyConverter(commands.Cog):
             'myr': '🇲🇾',
             'sgd': '🇸🇬',
             'krw': '🇰🇷',
+            'thb': '🇹🇭',
             'usd': '🇺🇸',
         }
         self.currency_names = {
@@ -38,6 +39,7 @@ class CurrencyConverter(commands.Cog):
             'myr': 'Malaysian Ringgit',
             'sgd': 'Singapore Dollar',
             'krw': 'South Korean Won',
+            'thb': 'Thai Baht',
             'usd': 'US Dollar',
         }
 
