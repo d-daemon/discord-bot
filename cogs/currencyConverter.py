@@ -16,15 +16,23 @@ class CurrencyConverter(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.default_currencies = [
-            'cad', 'hkd', 'inr',
-            'idr', 'myr', 'sgd',
-            'krw', 'thb', 'usd'
+            'cad',
+            'hkd',
+            'inr',
+            'idr',
+            'jpy',
+            'myr',
+            'sgd',
+            'krw',
+            'thb',
+            'usd'
         ]
         self.currency_flags = {
             'cad': '🇨🇦',
             'hkd': '🇭🇰',
             'inr': '🇮🇳',
             'idr': '🇮🇩',
+            'jpy': '🇯🇵',
             'myr': '🇲🇾',
             'sgd': '🇸🇬',
             'krw': '🇰🇷',
@@ -36,6 +44,7 @@ class CurrencyConverter(commands.Cog):
             'hkd': 'Hong Kong Dollar',
             'inr': 'Indian Rupee',
             'idr': 'Indonesian Rupiah',
+            'jpy': 'Japanese Yen',
             'myr': 'Malaysian Ringgit',
             'sgd': 'Singapore Dollar',
             'krw': 'South Korean Won',
