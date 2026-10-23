@@ -3,13 +3,15 @@ name = "discord-bot"
 version = "1.0.0"
 description = "The Headhunter's Guild Discord Bot"
 readme = "README.md"
-requires-python = ">=3.9, <3.12"
+requires-python = ">=3.9, <=3.15"
 dependencies = [
     "aiohttp>=3.11.18",
     "asyncpg>=0.30.0",
     "deep-translator>=1.11.4",
     "discord-py>=2.5.2",
+    "fake-useragent>=2.2.0",
     "gallery-dl>=1.27.0",
+    "instaloader>=4.15.3",
     "langdetect>=1.0.9",
     "pymultidictionary>=1.3.2",
     "python-dateutil>=2.9.0.post0",

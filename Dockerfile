@@ -1,5 +1,5 @@
 # Use an official Python runtime as a parent image.
-FROM python:3.11-slim
+FROM python:3.15-slim
 
 # Metadata
 LABEL image="https://hub.docker.com/r/hhxcusco/discord-bot"
