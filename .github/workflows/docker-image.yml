@@ -1,51 +1,56 @@
-name: Docker Image CI/CD
+name: Docker Image CI
 
 on:
   push:
     branches:
       - main
       - dev
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: docker-image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: hhxcusco/discord-bot
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@v4.4.1
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v4
+        uses: docker/login-action@v4.7.0
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v6.2.0
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' }}
+            type=sha,format=short
+
       - name: Build and push Docker image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@v7.4.0
         with:
           context: .
           push: true
-          tags: |
-            hhxcusco/discord-bot:${{ github.ref == 'refs/heads/main' && 'latest' || 'dev' }}
-          cache-from: type=registry,ref=hhxcusco/discord-bot:${{ github.ref == 'refs/heads/main' && 'latest' || 'dev' }}
-          cache-to: type=inline
-
-      - name: Install Docker Compose
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y docker-compose
-
-      - name: Deploy
-        env:
-          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DEV_POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-          DEV_POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          DEV_POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-        run: docker-compose -f docker-compose.yml up -d
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

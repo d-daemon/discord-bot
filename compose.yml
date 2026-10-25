@@ -1,13 +1,11 @@
 services:
   postgresql:
-    image: postgres:17
+    image: postgres:18.6
     container_name: postgresql
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_HOST_AUTH_METHOD: trust
-      PGDATA: /var/lib/postgresql/data/pgdata
     command: 
       - "postgres"
       - "-c"
@@ -17,8 +15,7 @@ services:
       - "-c"
       - "shared_buffers=256MB"
     volumes:
-      - ./postgresql/data:/var/lib/postgresql/data/pgdata
-      - ./postgresql/init:/docker-entrypoint-initdb.d
+      - ./postgresql:/var/lib/postgresql
     ports:
       - "5433:5432"
     restart: unless-stopped
@@ -31,15 +28,13 @@ services:
       - discord-bot-net
 
   discord-bot:
-    build:
-      context: .
-    image: discord-bot:latest
+    image: hhxcusco/discord-bot:${IMAGE_TAG:-latest}
     container_name: discord-bot
     ports:
       - "26218:5000"
     environment:
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgresql:5432/${POSTGRES_DB}
       INSTAGRAM_COOKIES: ${INSTAGRAM_COOKIES}
     volumes:
       - ./config:/app/config
