@@ -25,7 +25,7 @@ A Discord bot built using `discord.py` for various functionalities such as moder
 
 ### Prerequisites
 
-- Python 3.9+
+- Python 3.10+
 - Docker
 - Docker Compose (optional, for easier deployment)
 - [GitHub account](https://github.com/)
