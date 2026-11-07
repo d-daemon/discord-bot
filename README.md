@@ -62,7 +62,24 @@ A Discord bot built using `discord.py` for various functionalities such as moder
     # Discord bot configuration
     DISCORD_BOT_TOKEN=
     INSTAGRAM_COOKIES=
+
+   # Optional translation fallbacks (Google Translate remains the default)
+   DEEPL_API_KEY=
+   MYMEMORY_API_KEY=
     ```
+
+    `INSTAGRAM_COOKIES` is optional and can contain an Instagram `sessionid`
+    or a cookie string such as `sessionid=...; csrftoken=...`. Treat these
+    values like passwords. Instagram may require a valid session to access a
+    post. `/ig_photo` uses gallery-dl with the same cookies as Instagram video
+    downloads. Downloads can still fail if Instagram rejects the session or
+    changes its API; check the bot logs for details.
+
+   Translation tries Google's no-key translation endpoint first, then DeepL
+   API Free when `DEEPL_API_KEY` is configured, and finally MyMemory. MyMemory
+   works without a key at its lower anonymous quota; `MYMEMORY_API_KEY` enables
+   authenticated requests. Public translation endpoints may rate-limit requests.
+   API keys should be treated like passwords.
 
 ### GitHub Actions and Docker Hub
 

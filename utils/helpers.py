@@ -1,12 +1,11 @@
+import asyncio
+import logging
 import random
 import time
-import logging
-from dateutil import parser
-import asyncio
-import discord
-from discord.ext import commands
 
-# TODO: Replace hardcoded user agents with curl_cffi for curl-impersonate.
+import discord
+from dateutil import parser
+from discord.ext import commands
 
 USER_AGENTS = [
     # Chrome on Windows
@@ -26,8 +25,9 @@ USER_AGENTS = [
     # Chrome on Android
     "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
     # Safari on iOS
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_1_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1"
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_1_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1",
 ]
+
 
 def get_random_user_agent():
     """Return a random User-Agent.
@@ -39,11 +39,13 @@ def get_random_user_agent():
     """
     try:
         from fake_useragent import UserAgent
+
         ua = UserAgent()
         return ua.random
     except Exception:
         logging.debug("fake_useragent unavailable or failed, using fallback list")
         return random.choice(USER_AGENTS)
+
 
 def do_sleep():
     """Sleep a short time between requests to avoid rate limiting.
@@ -59,32 +61,42 @@ def do_sleep():
     logging.info(f"Rate limiting: Sleeping for {sleep_time} seconds")
     time.sleep(sleep_time)
 
+
 def format_message(author, content):
     """Format a message nicely for logging or display."""
     return f"{author}: {content}"
+
 
 def embed_message(title, description, color=discord.Color.blue()):
     """Create a simple Discord embed."""
     embed = discord.Embed(title=title, description=description, color=color)
     return embed
 
+
 async def send_typing_pause(channel, duration=1.0):
     """Simulate typing in a channel for a brief period."""
     async with channel.typing():
         await asyncio.sleep(duration)
 
+
 def clean_text(input_text):
     """Clean text to remove mentions or other unwanted parts for safety."""
     return discord.utils.escape_mentions(input_text)
+
 
 def parse_time(time_str):
     """Parse a time string into a datetime object."""
     return parser.parse(time_str)
 
+
 def admin_only():
     """Decorator to restrict command access to admins."""
+
     def predicate(ctx):
-        return ctx.author.guild_permissions.administrator
+        permissions = getattr(ctx.author, "guild_permissions", None)
+        return permissions is not None and permissions.administrator
+
     return commands.check(predicate)
+
 
 # Additional helpers can be added here as needed

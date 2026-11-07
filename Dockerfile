@@ -1,5 +1,5 @@
 # Use an official Python runtime as a parent image.
-FROM python:3.15-slim
+FROM python:3.15.2-slim
 
 # Metadata
 LABEL image="https://hub.docker.com/r/hhxcusco/discord-bot"
@@ -12,15 +12,16 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # Install dependencies
-RUN apt-get update && apt-get install -y ffmpeg nano
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg nano \
+	&& rm -rf /var/lib/apt/lists/*
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --require-hashes -r requirements.txt
 
 # Copy the current directory contents into the container at /app
 COPY . .
 
 # Copy and prepare the entrypoint script from the docker directory
-COPY docker/docker-entrypoint.sh /usr/local/bin/
+COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Define the entrypoint to initialize the container environment

@@ -1,48 +1,47 @@
 services:
-  postgresql:
+  discord-bot:
+    image: hhxcusco/discord-bot:latest
+    container_name: discord_bot
+    user: ${PUID:-1000}:${PGID:-1000}
+    ports:
+      - "${DISCORD_BOT_PORT:-5000}:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      INSTAGRAM_COOKIES:
+      DEEPL_API_KEY: ${DEEPL_API_KEY:-}
+      MYMEMORY_API_KEY: ${MYMEMORY_API_KEY:-}
+    volumes:
+      - ${PROJECT_DIRECTORY:-.}/config:/app/config
+      - ${PROJECT_DIRECTORY:-.}/data:/app/data
+    restart: unless-stopped
+    networks:
+      - discord-bot-network
+
+  postgres:
     image: postgres:18.6
-    container_name: postgresql
+    container_name: discord_bot_postgres
+    user: ${PUID:-1000}:${PGID:-1000}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ${PROJECT_DIRECTORY:-.}/db:/var/lib/postgresql
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    command: 
-      - "postgres"
-      - "-c"
-      - "listen_addresses=*"
-      - "-c"
-      - "max_connections=100"
-      - "-c"
-      - "shared_buffers=256MB"
-    volumes:
-      - ./postgresql:/var/lib/postgresql
-    ports:
-      - "5433:5432"
-    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - discord-bot-net
-
-  discord-bot:
-    image: hhxcusco/discord-bot:${IMAGE_TAG:-latest}
-    container_name: discord-bot
-    ports:
-      - "26218:5000"
-    environment:
-      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgresql:5432/${POSTGRES_DB}
-      INSTAGRAM_COOKIES: ${INSTAGRAM_COOKIES}
-    volumes:
-      - ./config:/app/config
-      - ./data:/app/data
     restart: unless-stopped
     networks:
-      - discord-bot-net
+      - discord-bot-network
 
 networks:
-  discord-bot-net:
+  discord-bot-network:
     driver: bridge

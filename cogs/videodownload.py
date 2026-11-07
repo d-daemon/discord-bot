@@ -1,43 +1,36 @@
+import asyncio
+import ipaddress
 import json
 import logging
 import os
 import shutil
+import socket
 import subprocess
 import tempfile
-from datetime import datetime
 from pathlib import Path
-import asyncio
+from typing import Any, cast
+from urllib.parse import urlsplit
+from uuid import uuid4
 
 import discord
 from discord import app_commands
 from discord.ext import commands
+from yt_dlp import YoutubeDL
 
 from utils.helpers import do_sleep
-from yt_dlp import YoutubeDL
+
+logger = logging.getLogger(__name__)
 
 
 def unique_directory(directory):
-    current_time = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    path = os.path.join(directory, current_time)
+    path = os.path.join(directory, uuid4().hex)
     os.makedirs(path, exist_ok=True)
     return path
 
 
 def unique_filename(directory, source_path=None):
-    # TODO: current implementation uses second-resolution timestamps which
-    # can collide if multiple files are created in the same second. Consider
-    # including microseconds ("%f") or using a UUID to guarantee uniqueness.
     extension = Path(source_path).suffix if source_path else ".mp4"
-    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return os.path.join(directory, f"{current_time}{extension}")
-
-
-def load_config():
-    config_path = os.environ.get("BOT_CONFIG_PATH", "/app/config/config.json")
-    if not os.path.exists(config_path):
-        return {}
-    with open(config_path, "r", encoding="utf-8") as config_file:
-        return json.load(config_file)
+    return os.path.join(directory, f"{uuid4().hex}{extension}")
 
 
 def build_gallery_dl_command(url, download_dir, is_instagram=False):
@@ -69,31 +62,76 @@ def write_instagram_cookie_file(cookie_value):
     if not cookie_pairs:
         cookie_pairs = [("sessionid", cookie_value)]
 
-    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as handle:
+    with tempfile.NamedTemporaryFile(
+        "w", suffix=".txt", delete=False, encoding="utf-8"
+    ) as handle:
         handle.write("# Netscape HTTP Cookie File\n")
         for name, value in cookie_pairs:
             handle.write(f".instagram.com\tTRUE\t/\tFALSE\t0\t{name}\t{value}\n")
-            handle.write(f"www.instagram.com\tTRUE\t/\tFALSE\t0\t{name}\t{value}\n")
         return handle.name
 
 
-DISCORD_MAX_ATTACHMENT_SIZE = 6 * 1024 * 1024
+def build_ytdlp_options(output_path, **overrides):
+    options = {
+        "outtmpl": output_path,
+        "format": "bestvideo+bestaudio/best",
+        "format_sort": ["vcodec:h264", "acodec:aac"],
+        "quiet": True,
+        "no_warnings": True,
+        "merge_output_format": "mp4",
+    }
+    options.update(overrides)
+    return options
 
 
-def build_ffmpeg_command(input_path, output_path):
+MIB = 1024 * 1024
+DEFAULT_ATTACHMENT_SIZE = 10 * MIB
+SERVER_ATTACHMENT_SIZES = {
+    0: 10 * MIB,
+    1: 10 * MIB,
+    2: 50 * MIB,
+    3: 100 * MIB,
+}
+
+
+def get_attachment_size_limit(interaction: discord.Interaction) -> int:
+    """Return Discord's live upload limit, with a tier fallback for older clients."""
+    interaction_limit = getattr(interaction, "filesize_limit", None)
+    if isinstance(interaction_limit, int) and interaction_limit > 0:
+        return interaction_limit
+
+    guild = getattr(interaction, "guild", None)
+    premium_tier = getattr(guild, "premium_tier", 0)
+    return SERVER_ATTACHMENT_SIZES.get(premium_tier, DEFAULT_ATTACHMENT_SIZE)
+
+
+COMPRESSION_PROFILES = (
+    (28, 854, "96k"),
+    (34, 640, "64k"),
+    (40, 480, "48k"),
+)
+
+
+class VideoCompressionError(RuntimeError):
+    pass
+
+
+def build_ffmpeg_command(
+    input_path, output_path, *, crf=28, width=854, audio_bitrate="96k"
+):
     return [
         "ffmpeg",
         "-y",
         "-i",
         str(input_path),
         "-vf",
-        "scale=854:trunc(ow/a/2)*2,fps=30",
+        f"scale={width}:trunc(ow/a/2)*2,fps=30",
         "-c:v",
         "libx264",
         "-preset",
         "veryfast",
         "-crf",
-        "28",
+        str(crf),
         "-profile:v",
         "main",
         "-level",
@@ -103,37 +141,89 @@ def build_ffmpeg_command(input_path, output_path):
         "-c:a",
         "aac",
         "-b:a",
-        "96k",
+        audio_bitrate,
         "-movflags",
         "+faststart",
         str(output_path),
     ]
 
 
-def compress_video_for_discord(video_path):
-    # TODO: `subprocess.run` is blocking. Run ffmpeg in a thread via
-    # `asyncio.to_thread()` or use `asyncio.create_subprocess_exec` when
-    # called from async code to avoid blocking the event loop.
-    if not shutil.which("ffmpeg"):
+def compress_video_for_discord(video_path, max_size):
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
         raise RuntimeError("ffmpeg is not installed or not available on PATH.")
 
-    output_path = str(Path(video_path).with_suffix(".compressed.mp4"))
-    completed = subprocess.run(
-        build_ffmpeg_command(video_path, output_path),
-        capture_output=True,
-        text=True,
-        timeout=600,
-        check=False,
+    if max_size <= 0:
+        raise ValueError("Maximum attachment size must be positive")
+
+    source_path = Path(video_path)
+    last_size = None
+    for attempt, (crf, width, audio_bitrate) in enumerate(
+        COMPRESSION_PROFILES, start=1
+    ):
+        if attempt == 1:
+            output_path = source_path.with_suffix(".compressed.mp4")
+        else:
+            output_path = source_path.with_name(
+                f"{source_path.stem}.compressed-{attempt}.mp4"
+            )
+
+        command = build_ffmpeg_command(
+            source_path,
+            output_path,
+            crf=crf,
+            width=width,
+            audio_bitrate=audio_bitrate,
+        )
+        command[0] = ffmpeg
+        try:
+            completed = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=600,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError) as error:
+            output_path.unlink(missing_ok=True)
+            raise VideoCompressionError(
+                "ffmpeg failed while compressing the video"
+            ) from error
+
+        if completed.returncode != 0:
+            output_path.unlink(missing_ok=True)
+            details = (completed.stderr or completed.stdout).strip()
+            logger.error("ffmpeg compression failed: %s", details)
+            raise VideoCompressionError("ffmpeg failed while compressing the video")
+
+        if not output_path.is_file() or output_path.stat().st_size == 0:
+            output_path.unlink(missing_ok=True)
+            raise VideoCompressionError("ffmpeg did not create a compressed video")
+
+        last_size = output_path.stat().st_size
+        if last_size <= max_size:
+            try:
+                source_path.unlink()
+            except OSError:
+                logger.warning(
+                    "Could not remove the uncompressed video %s", source_path
+                )
+            return str(output_path)
+
+        logger.info(
+            "Compressed video attempt %s is %s bytes; trying a smaller profile",
+            attempt,
+            last_size,
+        )
+        output_path.unlink()
+
+    if last_size is None:
+        raise VideoCompressionError("No compression profiles are configured")
+
+    raise VideoTooLargeError(
+        f"Could not compress the video below the {max_size / MIB:.1f} MiB attachment limit "
+        f"(smallest attempt was {last_size / MIB:.1f} MiB)."
     )
-    if completed.returncode != 0:
-        stderr = (completed.stderr or completed.stdout).strip()
-        raise RuntimeError(stderr or "Failed to compress the video for Discord.")
-
-    if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-        os.remove(video_path)
-        return output_path
-
-    raise RuntimeError("Compressed video was not created.")
 
 
 def find_downloaded_media(download_dir):
@@ -143,33 +233,30 @@ def find_downloaded_media(download_dir):
 
     video_extensions = {".mp4", ".webm", ".mkv", ".mov", ".avi", ".m4v"}
     video_files = [
-        path for path in download_path.rglob("*") if path.is_file() and path.suffix.lower() in video_extensions
+        path
+        for path in download_path.rglob("*")
+        if path.is_file() and path.suffix.lower() in video_extensions
     ]
-    if video_files:
-        return sorted(video_files)
-    return sorted(path for path in download_path.rglob("*") if path.is_file())
+    return sorted(video_files)
 
 
 def download_via_gallery_dl(video_url, download_dir, is_instagram=False):
-    # TODO: `do_sleep()` blocks the thread. Either make it async or call
-    # this function inside `asyncio.to_thread()` so the bot's event loop
-    # is not blocked by sleeps between downloads.
-    do_sleep()
-    os.makedirs(download_dir, exist_ok=True)
-    target_dir = unique_directory(download_dir)
-
-    command, cookie_file = build_gallery_dl_command(video_url, target_dir, is_instagram=is_instagram)
     gallery_dl = shutil.which("gallery-dl")
-    # TODO: we detect `gallery-dl` with `shutil.which()` but we don't use
-    # the absolute path when building the command. Consider replacing
-    # the command[0] with `gallery_dl` to avoid PATH inconsistencies.
     if not gallery_dl:
         raise RuntimeError("gallery-dl is not installed or not available on PATH.")
 
+    do_sleep()
+    os.makedirs(download_dir, exist_ok=True)
+    target_dir = unique_directory(download_dir)
+    cookie_file = None
     try:
-        # TODO: `subprocess.run` is blocking; run in a thread to avoid
-        # blocking the async event loop (e.g., `await asyncio.to_thread(subprocess.run, ...)`).
-        completed = subprocess.run(command, capture_output=True, text=True, timeout=600, check=False)
+        command, cookie_file = build_gallery_dl_command(
+            video_url, target_dir, is_instagram=is_instagram
+        )
+        command[0] = gallery_dl
+        completed = subprocess.run(
+            command, capture_output=True, text=True, timeout=600, check=False
+        )
         if completed.returncode != 0:
             stderr = (completed.stderr or completed.stdout).strip()
             raise RuntimeError(stderr or "gallery-dl failed to download the media.")
@@ -181,86 +268,36 @@ def download_via_gallery_dl(video_url, download_dir, is_instagram=False):
         media_path = downloaded_media[0]
         final_path = unique_filename(download_dir, media_path)
         os.replace(media_path, final_path)
-
-        for path in Path(target_dir).iterdir():
-            if path.is_file():
-                path.unlink()
-        try:
-            os.rmdir(target_dir)
-        except OSError:
-            pass
-
         return final_path
     finally:
         if cookie_file and os.path.exists(cookie_file):
             os.remove(cookie_file)
-
-    # NOTE: the code below was duplicated earlier; keep cleanup centralized
-    # above in the try/finally and return the final path there. Consider
-    # refactoring to ensure a single return/cleanup path.
+        shutil.rmtree(target_dir, ignore_errors=True)
 
 
 def download_instagram_video(post_url, download_dir):
     return download_via_gallery_dl(post_url, download_dir, is_instagram=True)
 
 
-def download_youtube_video(video_url, download_dir):
-    return download_with_ytdlp(video_url, download_dir)
-
-
 def download_tiktok_video(video_url, download_dir):
-    # TODO: blocking `do_sleep()` call — see utils.helpers note.
-    do_sleep()
-    os.makedirs(download_dir, exist_ok=True)
-    output_path = unique_filename(download_dir)
-    ydl_opts = {
-        "outtmpl": output_path,
-        "format": "bestvideo+bestaudio/best",
-        "quiet": True,
-        "no_warnings": True,
-        "merge_output_format": "mp4",
-        "socket_timeout": 30,
-        "retries": 10,
-        "extractor_retries": 10,
-        "http_headers": {
+    return download_with_ytdlp(
+        video_url,
+        download_dir,
+        socket_timeout=30,
+        retries=10,
+        extractor_retries=10,
+        http_headers={
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         },
-    }
-    with YoutubeDL(ydl_opts) as ydl:
-        ydl.extract_info(video_url, download=True)
-
-    if not os.path.exists(output_path) and os.path.exists(output_path + ".mp4"):
-        output_path += ".mp4"
-
-    if not os.path.exists(output_path):
-        raise FileNotFoundError("No video file found in the downloaded files!")
-
-    return output_path
+    )
 
 
-def download_facebook_reel(video_url, download_dir):
-    return download_with_ytdlp(video_url, download_dir)
-
-
-def download_youtube_short(video_url, download_dir):
-    return download_with_ytdlp(video_url, download_dir)
-
-
-def download_with_ytdlp(video_url, download_dir):
-    # TODO: yt_dlp `extract_info` is blocking (downloads and merges). Run
-    # the extractor in a thread (e.g., `await asyncio.to_thread`) to avoid
-    # blocking the event loop when invoked from async command handlers.
+def download_with_ytdlp(video_url, download_dir, **option_overrides):
     do_sleep()
     os.makedirs(download_dir, exist_ok=True)
     output_path = unique_filename(download_dir)
-    ydl_opts = {
-        "outtmpl": output_path,
-        "format": "bestvideo+bestaudio/best",
-        "quiet": True,
-        "no_warnings": True,
-        "merge_output_format": "mp4",
-    }
-    with YoutubeDL(ydl_opts) as ydl:
+    ydl_opts = build_ytdlp_options(output_path, **option_overrides)
+    with YoutubeDL(cast(Any, ydl_opts)) as ydl:
         ydl.extract_info(video_url, download=True)
 
     if not os.path.exists(output_path) and os.path.exists(output_path + ".mp4"):
@@ -282,10 +319,22 @@ def probe_media(file_path: str) -> dict:
     if not ffprobe:
         raise RuntimeError("ffprobe is not installed or available on PATH")
 
-    cmd = [ffprobe, "-v", "error", "-print_format", "json", "-show_streams", str(file_path)]
-    completed = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    cmd = [
+        ffprobe,
+        "-v",
+        "error",
+        "-print_format",
+        "json",
+        "-show_streams",
+        str(file_path),
+    ]
+    completed = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=30, check=False
+    )
     if completed.returncode != 0:
-        raise RuntimeError((completed.stderr or completed.stdout).strip() or "ffprobe failed")
+        raise RuntimeError(
+            (completed.stderr or completed.stdout).strip() or "ffprobe failed"
+        )
 
     return json.loads(completed.stdout)
 
@@ -327,13 +376,19 @@ def reencode_to_h264(input_path: str, output_path: str) -> str:
 
     This is a synchronous operation and should be executed in a thread.
     """
-    if not shutil.which("ffmpeg"):
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
         raise RuntimeError("ffmpeg is not installed or not available on PATH.")
 
     cmd = build_ffmpeg_command(input_path, output_path)
-    completed = subprocess.run(cmd, capture_output=True, text=True, timeout=1200, check=False)
+    cmd[0] = ffmpeg
+    completed = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=1200, check=False
+    )
     if completed.returncode != 0:
         stderr = (completed.stderr or completed.stdout or "").strip()
+        if os.path.exists(output_path):
+            os.remove(output_path)
         raise RuntimeError(stderr or "ffmpeg re-encode failed")
 
     if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
@@ -346,110 +401,195 @@ def reencode_to_h264(input_path: str, output_path: str) -> str:
     raise RuntimeError("Re-encoded file not created")
 
 
+VIDEO_HOSTS = {
+    "facebook": ("facebook.com", "fb.watch"),
+    "instagram": ("instagram.com",),
+    "tiktok": ("tiktok.com",),
+    "twitter": ("twitter.com", "x.com"),
+    "youtube": ("youtube.com", "youtu.be"),
+}
+
+
+class UnsupportedVideoUrl(ValueError):
+    pass
+
+
+class VideoTooLargeError(Exception):
+    pass
+
+
+def resolve_video_platform(video_url: str) -> str:
+    """Resolve a known downloader, otherwise allow yt-dlp's generic extractor for public hosts."""
+    try:
+        parsed = urlsplit(video_url)
+        hostname = (parsed.hostname or "").lower().rstrip(".")
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    except ValueError as error:
+        raise UnsupportedVideoUrl from error
+
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not hostname
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise UnsupportedVideoUrl("Use a valid public HTTP or HTTPS video URL.")
+
+    for platform, allowed_hosts in VIDEO_HOSTS.items():
+        if any(
+            hostname == host or hostname.endswith(f".{host}") for host in allowed_hosts
+        ):
+            return platform
+
+    if (
+        hostname == "localhost"
+        or hostname.endswith((".localhost", ".local"))
+        or "." not in hostname
+    ):
+        raise UnsupportedVideoUrl("Generic downloads require a public hostname.")
+
+    try:
+        address = ipaddress.ip_address(hostname)
+    except ValueError:
+        try:
+            resolved_addresses = {
+                ipaddress.ip_address(result[4][0])
+                for result in socket.getaddrinfo(
+                    hostname, port, type=socket.SOCK_STREAM
+                )
+            }
+        except (OSError, ValueError) as error:
+            raise UnsupportedVideoUrl(
+                "The video URL host could not be resolved safely."
+            ) from error
+        if not resolved_addresses or any(
+            not address.is_global for address in resolved_addresses
+        ):
+            raise UnsupportedVideoUrl("Generic downloads require a public hostname.")
+    else:
+        if not address.is_global:
+            raise UnsupportedVideoUrl(
+                "Generic downloads cannot target private or local IP addresses."
+            )
+
+    return "generic"
+
+
+def validate_video_url(platform: str, video_url: str) -> None:
+    if resolve_video_platform(video_url) != platform:
+        raise UnsupportedVideoUrl("Use a valid URL from the selected video platform.")
+
+
+def download_video_for_discord(video_url: str, download_dir: str, max_size: int) -> str:
+    platform = resolve_video_platform(video_url)
+    downloaders = {
+        "facebook": download_with_ytdlp,
+        "instagram": download_instagram_video,
+        "tiktok": download_tiktok_video,
+        "twitter": download_with_ytdlp,
+        "youtube": download_with_ytdlp,
+        "generic": download_with_ytdlp,
+    }
+    video_path = downloaders[platform](video_url, download_dir)
+
+    try:
+        if needs_reencode(probe_media(video_path)):
+            output_path = str(Path(video_path).with_suffix(".reencoded.mp4"))
+            video_path = reencode_to_h264(video_path, output_path)
+    except Exception:
+        logger.exception(
+            "Media compatibility check failed; using the original download"
+        )
+
+    if os.path.getsize(video_path) > max_size:
+        video_path = compress_video_for_discord(video_path, max_size)
+
+    file_size = os.path.getsize(video_path)
+    if file_size > max_size:
+        raise VideoTooLargeError(
+            f"The downloaded video is still too large to send ({file_size / (1024 * 1024):.1f} MB)."
+        )
+    return video_path
+
+
 class VideoDownload(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.download_dir = os.environ.get("VIDEO_DOWNLOAD_DIR", "/app/data/DL-Output")
-        os.makedirs(self.download_dir, exist_ok=True)
+        self.download_dir = Path(os.environ.get("BOT_DATA_DIR", "/app/data")) / "videos"
+        self.download_dir.mkdir(parents=True, exist_ok=True)
 
-    async def setup(self):
-        logging.info("Fetching guild IDs for VideoDownload cog.")
-        guild_ids = await self.fetch_guild_ids()
-        # for guild_id in guild_ids:
-        #     self.bot.tree.add_command(self.download_video, guild=discord.Object(id=guild_id))
-        logging.info("VideoDownload cog commands added for guilds.")
+    @app_commands.command(
+        name="video_dl", description="Download a video from various platforms"
+    )
+    @app_commands.describe(url="URL of the video to download")
+    async def download_video(self, interaction: discord.Interaction, url: str):
+        await interaction.response.defer()
+        channel = interaction.channel
+        if not isinstance(channel, (discord.TextChannel, discord.Thread)):
+            await interaction.followup.send(
+                "Use this command in a server text channel.", ephemeral=True
+            )
+            return
 
-    async def fetch_guild_ids(self):
-        async with self.bot.db_pool.acquire() as connection:
-            records = await connection.fetch("SELECT guild_id FROM guilds")
-            return [record['guild_id'] for record in records]
-
-    @app_commands.command(name="video_dl", description="Download a video from various platforms")
-    @app_commands.describe(platform="Platform to download video from", url="URL of the video")
-    @app_commands.choices(platform=[
-        app_commands.Choice(name='Facebook', value='facebook'),
-        app_commands.Choice(name='Facebook Reels', value='facebook_reels'),
-        app_commands.Choice(name='Instagram', value='instagram'),
-        app_commands.Choice(name='TikTok', value='tiktok'),
-        app_commands.Choice(name='Twitter', value='twitter'),
-        app_commands.Choice(name='YouTube', value='youtube'),
-        app_commands.Choice(name='YouTube Shorts', value='youtube_short')])
-    async def download_video(self, interaction: discord.Interaction, platform: app_commands.Choice[str], url: str):
-        await interaction.response.defer(ephemeral=True)
-        logging.info(f"{interaction.user} requested to download a video from {platform.name} with URL: {url}")
         try:
-            if platform.value == 'instagram':
-                video_path = download_instagram_video(url, self.download_dir)
-            elif platform.value == 'youtube':
-                video_path = download_youtube_video(url, self.download_dir)
-            elif platform.value == 'tiktok':
-                video_path = download_tiktok_video(url, self.download_dir)
-            elif platform.value == 'facebook_reels':
-                video_path = download_facebook_reel(url, self.download_dir)
-            elif platform.value == 'youtube_short':
-                video_path = download_youtube_short(url, self.download_dir)
-            else:
-                video_path = download_with_ytdlp(url, self.download_dir)
-
-            # Post-process the downloaded file in a background thread: probe with
-            # ffprobe and re-encode to H.264/AAC/yuv420p when necessary to
-            # improve mobile compatibility (VP9/VP0 can freeze on some devices).
-            try:
-                def _post_process(path):
-                    try:
-                        info = probe_media(path)
-                        if needs_reencode(info):
-                            out_path = str(Path(path).with_suffix('.reencoded.mp4'))
-                            return reencode_to_h264(path, out_path)
-                        return path
-                    except Exception:
-                        # If probing/re-encoding fails, return the original path
-                        logging.exception("Post-process failed for downloaded media")
-                        return path
-
-                video_path = await asyncio.to_thread(_post_process, video_path)
-            except Exception:
-                logging.exception("Failed to run post-processing in background")
-
-            file_size = os.path.getsize(video_path)
-            if file_size > DISCORD_MAX_ATTACHMENT_SIZE:
-                try:
-                    compressed_path = compress_video_for_discord(video_path)
-                    video_path = compressed_path
-                    file_size = os.path.getsize(video_path)
-                except Exception as compression_error:
-                    os.remove(video_path)
-                    await interaction.followup.send(
-                        f"The downloaded video is too large to send to Discord and compression failed: {compression_error}",
-                        ephemeral=True,
-                    )
-                    return
-
-            if file_size > DISCORD_MAX_ATTACHMENT_SIZE:
-                os.remove(video_path)
-                await interaction.followup.send(
-                    f"The downloaded video is still too large to send to Discord ({file_size / (1024 * 1024):.1f} MB). Please try a smaller clip.",
-                    ephemeral=True,
+            hostname = urlsplit(url).hostname or "unknown-host"
+        except ValueError:
+            hostname = "invalid-url"
+        logger.info(
+            "User %s requested a video download from %s: %s",
+            interaction.user.id,
+            hostname,
+            url,
+        )
+        request_dir = None
+        try:
+            request_dir = Path(
+                tempfile.mkdtemp(prefix="request-", dir=self.download_dir)
+            )
+            max_size = get_attachment_size_limit(interaction)
+            download_task = asyncio.create_task(
+                asyncio.to_thread(
+                    download_video_for_discord,
+                    url,
+                    str(request_dir),
+                    max_size,
                 )
-                return
+            )
+            try:
+                video_path = await asyncio.shield(download_task)
+            except asyncio.CancelledError:
+                try:
+                    await download_task
+                except Exception:
+                    logger.exception(
+                        "Video download failed after its interaction was cancelled"
+                    )
+                raise
 
-            self.config = load_config()
             file = discord.File(video_path, filename=os.path.basename(video_path))
-            await interaction.channel.send(f"{interaction.user.mention} Here is your downloaded video:", file=file)
-            os.remove(video_path)
-
-            for entry in os.listdir(self.download_dir):
-                file_path = os.path.join(self.download_dir, entry)
-                if os.path.isfile(file_path):
-                    os.remove(file_path)
-
-            await interaction.followup.send(f"The video has been sent to the '{interaction.channel.name}' channel.", ephemeral=True)
-        except Exception as e:
-            logging.exception("Failed to download or send the video")
-            await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
+            try:
+                await interaction.followup.send(
+                    f"{interaction.user.mention} Here is your downloaded video.",
+                    file=file,
+                )
+            finally:
+                file.close()
+        except UnsupportedVideoUrl:
+            await interaction.followup.send(
+                "Use a valid public URL from a supported video source.", ephemeral=True
+            )
+        except VideoTooLargeError as error:
+            await interaction.followup.send(str(error), ephemeral=True)
+        except Exception:
+            logger.exception("Failed to download or send a video")
+            await interaction.followup.send(
+                "The video could not be downloaded or sent.",
+                ephemeral=True,
+            )
+        finally:
+            if request_dir is not None:
+                await asyncio.to_thread(shutil.rmtree, request_dir, True)
 
 
 async def setup(bot):
-    cog = VideoDownload(bot)
-    await cog.setup()
-    await bot.add_cog(cog)
+    await bot.add_cog(VideoDownload(bot))
