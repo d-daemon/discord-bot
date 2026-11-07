@@ -12,9 +12,10 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # Install dependencies
-RUN apt-get update && apt-get install -y ffmpeg nano
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg nano \
+	&& rm -rf /var/lib/apt/lists/*
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --require-hashes -r requirements.txt
 
 # Copy the current directory contents into the container at /app
 COPY . .

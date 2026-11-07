@@ -1,5 +1,5 @@
-from discord.ui import View, Button
 import discord
+from discord.ui import Button, View
 
 
 class PaginatorView(View):
@@ -11,6 +11,8 @@ class PaginatorView(View):
         loop: bool = False,
         timeout: int = 60,
     ):
+        if not pages:
+            raise ValueError("Paginator requires at least one page")
         super().__init__(timeout=timeout)
         self.pages = pages
         self.index = 0
@@ -23,6 +25,8 @@ class PaginatorView(View):
             try:
                 await self.message.edit(view=None)
             except discord.NotFound:
+                pass
+            except discord.HTTPException:
                 pass
 
     async def send(self, ctx):

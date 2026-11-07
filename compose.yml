@@ -12,6 +12,8 @@ services:
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       INSTAGRAM_COOKIES:
+      DEEPL_API_KEY: ${DEEPL_API_KEY:-}
+      MYMEMORY_API_KEY: ${MYMEMORY_API_KEY:-}
     volumes:
       - ${PROJECT_DIRECTORY:-.}/config:/app/config
       - ${PROJECT_DIRECTORY:-.}/data:/app/data
