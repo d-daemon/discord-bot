@@ -64,6 +64,13 @@ A Discord bot built using `discord.py` for various functionalities such as moder
     INSTAGRAM_COOKIES=
     ```
 
+    `INSTAGRAM_COOKIES` is optional and can contain an Instagram `sessionid`
+    or a cookie string such as `sessionid=...; csrftoken=...`. Treat these
+    values like passwords. Instagram may require a valid session to access a
+    post. `/ig_photo` uses gallery-dl with the same cookies as Instagram video
+    downloads. Downloads can still fail if Instagram rejects the session or
+    changes its API; check the bot logs for details.
+
 ### GitHub Actions and Docker Hub
 
 1. Set Up GitHub Secrets:

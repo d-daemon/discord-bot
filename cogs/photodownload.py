@@ -1,43 +1,24 @@
+import asyncio
 import json
 import logging
 import os
+import shutil
+import subprocess
+import tempfile
 from datetime import datetime
+from pathlib import Path
+from uuid import uuid4
 
 import discord
-import instaloader
 from discord import app_commands
 from discord.ext import commands
-from utils.helpers import get_random_user_agent, do_sleep
+from cogs.videodownload import build_gallery_dl_command
+from utils.helpers import do_sleep
 
 
 def unique_filename(directory, base_name, index):
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     return os.path.join(directory, f"{base_name}_{current_time}_{index}.jpg")
-
-def apply_instagram_cookies_to_instaloader(loader, cookie_value: str):
-    """Apply Instagram cookies (from env) to an Instaloader instance's requests session.
-
-    Accepts cookie strings like `sessionid=...; csrftoken=...` or a raw sessionid value.
-    """
-    if not cookie_value:
-        return
-
-    cookie_pairs = []
-    if "=" in cookie_value:
-        for part in cookie_value.replace("&", ";").split(";"):
-            if "=" in part:
-                name, value = part.split("=", 1)
-                cookie_pairs.append((name.strip(), value.strip()))
-
-    if not cookie_pairs:
-        cookie_pairs = [("sessionid", cookie_value)]
-
-    try:
-        sess = loader.context._session
-        for name, value in cookie_pairs:
-            sess.cookies.set(name, value, domain=".instagram.com", path="/")
-    except Exception:
-        logging.exception("Failed to apply Instagram cookies to Instaloader session")
 
 def load_config():
     # TODO: Avoid hardcoding the config path; use `BOT_CONFIG_PATH` env
@@ -46,45 +27,45 @@ def load_config():
         return json.load(config_file)
 
 def download_instagram_photos(post_url, download_dir):
-    L = instaloader.Instaloader(
-        dirname_pattern=download_dir, 
-        filename_pattern="{shortcode}", 
-        save_metadata=False,
-        user_agent=get_random_user_agent()
+    with tempfile.TemporaryDirectory(dir=download_dir) as work_dir:
+        do_sleep()
+        download_photos_via_gallery_dl(post_url, work_dir)
+
+        photo_files = sorted(
+            path for path in Path(work_dir).rglob("*")
+            if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
         )
-    L.download_comments = False
-    shortcode = post_url.split('/')[-2]
+        if not photo_files:
+            raise FileNotFoundError("No photo file found in the downloaded files!")
 
-    # Apply INSTAGRAM_COOKIES if provided in the environment so Instaloader
-    # can access media that requires an authenticated session.
-    cookies = os.environ.get("INSTAGRAM_COOKIES", "").strip()
-    if cookies:
-        apply_instagram_cookies_to_instaloader(L, cookies)
+        downloaded_files = []
+        for index, photo_file in enumerate(photo_files, 1):
+            new_filename = os.path.join(download_dir, f"{uuid4().hex}_{index}{photo_file.suffix.lower()}")
+            os.replace(photo_file, new_filename)
+            downloaded_files.append(new_filename)
+        return downloaded_files
 
-    # TODO: `do_sleep()` blocks the event loop; either make it async or run
-    # this function in a thread to avoid blocking when called from commands.
-    do_sleep()
-    post = instaloader.Post.from_shortcode(L.context, shortcode)
 
-    do_sleep()
-    L.download_post(post, target=download_dir)
-    
-    photo_files = [f for f in os.listdir(download_dir) if f.endswith('.jpg')]
-    if not photo_files:
-        raise FileNotFoundError("No photo file found in the downloaded files!")
-    
-    downloaded_files = []
-    for index, photo_file in enumerate(photo_files):
-        new_filename = unique_filename(download_dir, shortcode, index + 1)
-        os.rename(os.path.join(download_dir, photo_file), new_filename)
-        downloaded_files.append(new_filename)
-    
-    return downloaded_files
+def download_photos_via_gallery_dl(post_url, download_dir):
+    if not shutil.which("gallery-dl"):
+        raise RuntimeError("gallery-dl is not installed or not available on PATH.")
+
+    command, cookie_file = build_gallery_dl_command(post_url, download_dir, is_instagram=True)
+    try:
+        completed = subprocess.run(command, capture_output=True, text=True, timeout=600, check=False)
+        if completed.returncode != 0:
+            logging.error("gallery-dl failed: %s", (completed.stderr or completed.stdout).strip())
+            raise RuntimeError(
+                "gallery-dl could not download the photos. Check the bot logs and Instagram session."
+            )
+    finally:
+        if cookie_file and os.path.exists(cookie_file):
+            os.remove(cookie_file)
 
 class PhotoDownload(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.download_dir = "/app/data/Photo-Output"
+        self.download_dir = "/app/data/images"
         if not os.path.exists(self.download_dir):
             os.makedirs(self.download_dir)
 
@@ -108,7 +89,7 @@ class PhotoDownload(commands.Cog):
         logging.info(f"{interaction.user} requested to download a photo from Instagram with URL: {url}")
         
         try:
-            photo_paths = download_instagram_photos(url, self.download_dir)
+            photo_paths = await asyncio.to_thread(download_instagram_photos, url, self.download_dir)
             
             if len(photo_paths) == 1:
                 selected_photos = [photo_paths[0]]
@@ -140,10 +121,8 @@ class PhotoDownload(commands.Cog):
                         await interaction.delete_original_response()
 
                         # Clean up after sending
-                        for f in os.listdir(self.download_dir):
-                            file_path = os.path.join(self.download_dir, f)
-                            if os.path.isfile(file_path):
-                                os.remove(file_path)
+                        for photo in photo_paths:
+                            os.remove(photo)
 
                 view = discord.ui.View(timeout=30)  # Set the timeout to 30 seconds
                 view.add_item(MultiPhotoSelect(self.download_dir))
@@ -154,10 +133,8 @@ class PhotoDownload(commands.Cog):
                     await interaction.channel.send(f"{interaction.user.mention} You did not respond in time, so here are all the photos:", files=files)
 
                     # Clean up after sending
-                    for f in os.listdir(self.download_dir):
-                        file_path = os.path.join(self.download_dir, f)
-                        if os.path.isfile(file_path):
-                            os.remove(file_path)
+                    for photo in photo_paths:
+                        os.remove(photo)
 
                     # Delete the original message with the dropdown
                     await interaction.delete_original_response()
@@ -172,10 +149,8 @@ class PhotoDownload(commands.Cog):
                 await interaction.channel.send(f"{interaction.user.mention} Here is your downloaded photo:", file=file)
 
             # Clean up download directory
-            for f in os.listdir(self.download_dir):
-                file_path = os.path.join(self.download_dir, f)
-                if os.path.isfile(file_path):
-                    os.remove(file_path)
+            for photo in photo_paths:
+                os.remove(photo)
 
         except Exception as e:
             logging.exception("Failed to download or send the photo")

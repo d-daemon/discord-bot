@@ -349,8 +349,9 @@ def reencode_to_h264(input_path: str, output_path: str) -> str:
 class VideoDownload(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.download_dir = os.environ.get("VIDEO_DOWNLOAD_DIR", "/app/data/DL-Output")
-        os.makedirs(self.download_dir, exist_ok=True)
+        self.download_dir = "/app/data/videos"
+        if not os.path.exists(self.download_dir):
+            os.makedirs(self.download_dir)
 
     async def setup(self):
         logging.info("Fetching guild IDs for VideoDownload cog.")
