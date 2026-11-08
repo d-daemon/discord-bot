@@ -1,6 +1,8 @@
 import discord
 from discord.ui import Button, View
 
+from utils.helpers import send_ephemeral
+
 
 class PaginatorView(View):
     def __init__(
@@ -43,10 +45,8 @@ class PaginatorView(View):
 
     @discord.ui.button(label="Previous", style=discord.ButtonStyle.secondary)
     async def previous(self, interaction: discord.Interaction, button: Button):
-        if interaction.user != self.author:
-            await interaction.response.send_message(
-                "You can't use these buttons.", ephemeral=True
-            )
+        if interaction.user.id != self.author.id:
+            await send_ephemeral(interaction, "You can't use these buttons.")
             return
 
         if self.index > 0:
@@ -60,10 +60,8 @@ class PaginatorView(View):
 
     @discord.ui.button(label="Next", style=discord.ButtonStyle.secondary)
     async def next(self, interaction: discord.Interaction, button: Button):
-        if interaction.user != self.author:
-            await interaction.response.send_message(
-                "You can't use these buttons.", ephemeral=True
-            )
+        if interaction.user.id != self.author.id:
+            await send_ephemeral(interaction, "You can't use these buttons.")
             return
 
         if self.index < len(self.pages) - 1:

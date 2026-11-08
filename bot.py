@@ -32,8 +32,6 @@ def load_config(config_path: str) -> dict[str, Any]:
 class DatabaseConnectionError(Exception):
     """Raised when database connection fails."""
 
-    pass
-
 
 class MyBot(commands.Bot):
     """
@@ -148,9 +146,8 @@ class MyBot(commands.Bot):
             raise DatabaseConnectionError("Database connection not available")
 
         try:
-            async with self.db_pool.acquire() as conn:
-                async with conn.transaction():
-                    return await operation(conn)
+            async with self.db_pool.acquire() as conn, conn.transaction():
+                return await operation(conn)
         except asyncpg.PostgresError as e:
             logger.error(f"Database operation failed: {e}")
             raise

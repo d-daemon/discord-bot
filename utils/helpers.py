@@ -29,6 +29,35 @@ USER_AGENTS = [
 ]
 
 
+EPHEMERAL_MESSAGE_DELETE_AFTER = 10
+
+
+async def send_ephemeral(
+    interaction: discord.Interaction,
+    content: str,
+    *,
+    delete_after: float = EPHEMERAL_MESSAGE_DELETE_AFTER,
+) -> None:
+    if interaction.response.is_done():
+        await interaction.followup.send(
+            content, ephemeral=True, delete_after=delete_after
+        )
+    else:
+        await interaction.response.send_message(
+            content, ephemeral=True, delete_after=delete_after
+        )
+
+
+async def edit_ephemeral_response(
+    interaction: discord.Interaction,
+    content: str,
+    *,
+    delete_after: float = EPHEMERAL_MESSAGE_DELETE_AFTER,
+) -> None:
+    message = await interaction.edit_original_response(content=content)
+    await message.delete(delay=delete_after)
+
+
 def get_random_user_agent():
     """Return a random User-Agent.
 

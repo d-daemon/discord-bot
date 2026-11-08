@@ -17,7 +17,11 @@ from discord import app_commands
 from discord.ext import commands
 from yt_dlp import YoutubeDL
 
-from utils.helpers import do_sleep
+from utils.helpers import (
+    do_sleep,
+    edit_ephemeral_response,
+    send_ephemeral,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -523,11 +527,11 @@ class VideoDownload(commands.Cog):
     )
     @app_commands.describe(url="URL of the video to download")
     async def download_video(self, interaction: discord.Interaction, url: str):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         channel = interaction.channel
         if not isinstance(channel, (discord.TextChannel, discord.Thread)):
-            await interaction.followup.send(
-                "Use this command in a server text channel.", ephemeral=True
+            await send_ephemeral(
+                interaction, "Use this command in a server text channel."
             )
             return
 
@@ -568,23 +572,25 @@ class VideoDownload(commands.Cog):
 
             file = discord.File(video_path, filename=os.path.basename(video_path))
             try:
-                await interaction.followup.send(
+                await channel.send(
                     f"{interaction.user.mention} Here is your downloaded video.",
                     file=file,
+                )
+                await edit_ephemeral_response(
+                    interaction, "Your video was sent to the channel."
                 )
             finally:
                 file.close()
         except UnsupportedVideoUrl:
-            await interaction.followup.send(
-                "Use a valid public URL from a supported video source.", ephemeral=True
+            await send_ephemeral(
+                interaction, "Use a valid public URL from a supported video source."
             )
         except VideoTooLargeError as error:
-            await interaction.followup.send(str(error), ephemeral=True)
+            await send_ephemeral(interaction, str(error))
         except Exception:
             logger.exception("Failed to download or send a video")
-            await interaction.followup.send(
-                "The video could not be downloaded or sent.",
-                ephemeral=True,
+            await send_ephemeral(
+                interaction, "The video could not be downloaded or sent."
             )
         finally:
             if request_dir is not None:

@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 import discord
 import requests
 from discord.ext import commands, tasks
-from discord.ui import Button, View
+from discord.ui import Button
 from langdetect import detect
 from langdetect.lang_detect_exception import LangDetectException
 
@@ -19,6 +19,8 @@ from utils.__language_data import (
     LANGUAGE_EMOJI_MAP,
     MULTI_LANG_COUNTRIES,
 )
+from utils.helpers import send_ephemeral
+from utils.paginator import PaginatorView
 
 logger = logging.getLogger(__name__)
 
@@ -140,59 +142,6 @@ def translate_with_mymemory(
     return "".join(translations)
 
 
-class LanguagePaginator(View):
-    def __init__(self, pages, author):
-        super().__init__(timeout=60)
-        self.pages = pages
-        self.current_page = 0
-        self.author = author
-        self.message: discord.Message | None = None
-        self.update_buttons()
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id != self.author.id:
-            await interaction.response.send_message(
-                "You can't use these buttons.", ephemeral=True
-            )
-            return False
-        return True
-
-    @discord.ui.button(label="Previous", style=discord.ButtonStyle.secondary)
-    async def previous_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ):
-        if self.current_page > 0:
-            self.current_page -= 1
-            self.update_buttons()
-            await interaction.response.edit_message(
-                embed=self.pages[self.current_page], view=self
-            )
-
-    @discord.ui.button(label="Next", style=discord.ButtonStyle.secondary)
-    async def next_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ):
-        if self.current_page < len(self.pages) - 1:
-            self.current_page += 1
-            self.update_buttons()
-            await interaction.response.edit_message(
-                embed=self.pages[self.current_page], view=self
-            )
-
-    def update_buttons(self):
-        self.previous_button.disabled = self.current_page == 0
-        self.next_button.disabled = self.current_page == len(self.pages) - 1
-
-    async def on_timeout(self):
-        if self.message is not None:
-            try:
-                await self.message.edit(view=None)
-            except discord.NotFound:
-                pass
-            except discord.HTTPException:
-                logger.exception("Failed to disable expired language pagination")
-
-
 class LanguageButtons(discord.ui.View):
     def __init__(self, cog, message, user, options):
         super().__init__()
@@ -216,9 +165,7 @@ class LanguageButtons(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user.id:
-            await interaction.response.send_message(
-                "This language selection is not for you.", ephemeral=True
-            )
+            await send_ephemeral(interaction, "This language selection is not for you.")
             return False
         return True
 
@@ -558,9 +505,8 @@ class TranslationCog(commands.Cog):
 
             pages.append(embed)
 
-        paginator = LanguagePaginator(pages, ctx.author)
-        message = await ctx.send(embed=pages[0], view=paginator)
-        paginator.message = message
+        paginator = PaginatorView(pages, ctx.author)
+        await paginator.send(ctx)
 
     @commands.command(name="translation_info")
     async def translation_info(self, ctx):

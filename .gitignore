@@ -358,4 +358,7 @@ $RECYCLE.BIN/
 
 .build/
 .obsolete/
-compose.local.yml
+compose.dev.yml
+data/*
+db/*
+config/config.json

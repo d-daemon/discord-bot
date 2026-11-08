@@ -1,489 +1,395 @@
 LANGUAGE_EMOJI_MAP = {
-    'en': ['🇬🇧', '🇺🇸', '🇦🇺'],
-    'es': ['🇪🇸', '🇲🇽', '🇦🇷', '🇨🇴'],
-    'fr': ['🇫🇷', '🇧🇪'],
-    'de': ['🇩🇪', '🇦🇹'],
-    'it': ['🇮🇹'],
-    'pt': ['🇵🇹', '🇧🇷'],
-    'ru': ['🇷🇺'],
-    'ja': ['🇯🇵'],
-    'ko': ['🇰🇷'],
-    'zh-CN': ['🇨🇳'],
-    'zh-TW': ['🇹🇼', '🇭🇰'],
-    'ar': ['🇸🇦', '🇪🇬', '🇦🇪'],
-    'hi': ['🇮🇳'],
-    'tr': ['🇹🇷'],
-    'nl': ['🇳🇱'],
-    'pl': ['🇵🇱'],
-    'sv': ['🇸🇪'],
-    'da': ['🇩🇰'],
-    'fi': ['🇫🇮'],
-    'no': ['🇳🇴'],
-    'uk': ['🇺🇦'],
-    'el': ['🇬🇷'],
-    'he': ['🇮🇱'],
-    'th': ['🇹🇭'],
-    'vi': ['🇻🇳'],
-    'id': ['🇮🇩'],
-    'ms': ['🇲🇾'],
-    'fa': ['🇮🇷'],
-    'bn': ['🇧🇩'],
-    'fil': ['🇵🇭'],
-    'sw': ['🇰🇪', '🇹🇿'],
-    'am': ['🇪🇹'],
-    'ta': ['🇮🇳', '🇱🇰'],
-    'te': ['🇮🇳'],
-    'ur': ['🇵🇰', '🇮🇳'],
+    "en": ["🇬🇧", "🇺🇸", "🇦🇺"],
+    "es": ["🇪🇸", "🇲🇽", "🇦🇷", "🇨🇴"],
+    "fr": ["🇫🇷", "🇧🇪"],
+    "de": ["🇩🇪", "🇦🇹"],
+    "it": ["🇮🇹"],
+    "pt": ["🇵🇹", "🇧🇷"],
+    "ru": ["🇷🇺"],
+    "ja": ["🇯🇵"],
+    "ko": ["🇰🇷"],
+    "zh-CN": ["🇨🇳"],
+    "zh-TW": ["🇹🇼", "🇭🇰"],
+    "ar": ["🇸🇦", "🇪🇬", "🇦🇪"],
+    "hi": ["🇮🇳"],
+    "tr": ["🇹🇷"],
+    "nl": ["🇳🇱"],
+    "pl": ["🇵🇱"],
+    "sv": ["🇸🇪"],
+    "da": ["🇩🇰"],
+    "fi": ["🇫🇮"],
+    "no": ["🇳🇴"],
+    "uk": ["🇺🇦"],
+    "el": ["🇬🇷"],
+    "he": ["🇮🇱"],
+    "th": ["🇹🇭"],
+    "vi": ["🇻🇳"],
+    "id": ["🇮🇩"],
+    "ms": ["🇲🇾"],
+    "fa": ["🇮🇷"],
+    "bn": ["🇧🇩"],
+    "fil": ["🇵🇭"],
+    "sw": ["🇰🇪", "🇹🇿"],
+    "am": ["🇪🇹"],
+    "ta": ["🇮🇳", "🇱🇰"],
+    "te": ["🇮🇳"],
+    "ur": ["🇵🇰", "🇮🇳"],
 }
 
 MULTI_LANG_COUNTRIES = {
-    '🇨🇦': {'en': 'English', 'fr': 'French'},
-    '🇨🇭': {'de': 'German', 'fr': 'French', 'it': 'Italian'},
-    '🇧🇪': {'nl': 'Dutch', 'fr': 'French', 'de': 'German'},
+    "🇨🇦": {"en": "English", "fr": "French"},
+    "🇨🇭": {"de": "German", "fr": "French", "it": "Italian"},
+    "🇧🇪": {"nl": "Dutch", "fr": "French", "de": "German"},
 }
 
 LANG_CODE_MAP = {
     # Chinese variations
-    'zh-cn': 'zh-CN',
-    'zh-tw': 'zh-TW',
-    'zh-hk': 'zh-TW',
-    'zh': 'zh-CN',  # Default Chinese to Simplified
-    'zhong': 'zh-CN',
-    'chinese': 'zh-CN',
-    'mandarin': 'zh-CN',
-
+    "zh-cn": "zh-CN",
+    "zh-tw": "zh-TW",
+    "zh-hk": "zh-TW",
+    "zh": "zh-CN",  # Default Chinese to Simplified
+    "zhong": "zh-CN",
+    "chinese": "zh-CN",
+    "mandarin": "zh-CN",
     # Hebrew
-    'iw': 'he',
-    'hebrew': 'he',
-
+    "iw": "he",
+    "hebrew": "he",
     # Javanese
-    'jw': 'jv',
-    'javanese': 'jv',
-
+    "jw": "jv",
+    "javanese": "jv",
     # Filipino/Tagalog
-    'tl': 'fil',
-    'tagalog': 'fil',
-    'filipino': 'fil',
-
+    "tl": "fil",
+    "tagalog": "fil",
+    "filipino": "fil",
     # Norwegian variations
-    'no': 'nb',  # Default Norwegian to Bokmål
-    'nor': 'nb',
-    'norwegian': 'nb',
-
+    "no": "nb",  # Default Norwegian to Bokmål
+    "nor": "nb",
+    "norwegian": "nb",
     # Greek
-    'el': 'el',
-    'greek': 'el',
-
+    "el": "el",
+    "greek": "el",
     # Basque
-    'eu': 'eu',
-    'basque': 'eu',
-
+    "eu": "eu",
+    "basque": "eu",
     # Serbian variations
-    'sr-latn': 'sr',  # Serbian Latin to Cyrillic
-    'serbian': 'sr',
-
+    "sr-latn": "sr",  # Serbian Latin to Cyrillic
+    "serbian": "sr",
     # Azerbaijani
-    'az': 'az',
-    'azerbaijani': 'az',
-
+    "az": "az",
+    "azerbaijani": "az",
     # Belarusian
-    'be': 'be',
-    'belarusian': 'be',
-
+    "be": "be",
+    "belarusian": "be",
     # Bengali/Bangla
-    'bn': 'bn',
-    'bengali': 'bn',
-    'bangla': 'bn',
-
+    "bn": "bn",
+    "bengali": "bn",
+    "bangla": "bn",
     # Bosnian
-    'bs': 'bs',
-    'bosnian': 'bs',
-
+    "bs": "bs",
+    "bosnian": "bs",
     # Czech
-    'cs': 'cs',
-    'czech': 'cs',
-
+    "cs": "cs",
+    "czech": "cs",
     # Welsh
-    'cy': 'cy',
-    'welsh': 'cy',
-
+    "cy": "cy",
+    "welsh": "cy",
     # Danish
-    'da': 'da',
-    'danish': 'da',
-
+    "da": "da",
+    "danish": "da",
     # German
-    'de': 'de',
-    'german': 'de',
-
+    "de": "de",
+    "german": "de",
     # Estonian
-    'et': 'et',
-    'estonian': 'et',
-
+    "et": "et",
+    "estonian": "et",
     # Persian/Farsi
-    'fa': 'fa',
-    'persian': 'fa',
-    'farsi': 'fa',
-
+    "fa": "fa",
+    "persian": "fa",
+    "farsi": "fa",
     # Finnish
-    'fi': 'fi',
-    'finnish': 'fi',
-
+    "fi": "fi",
+    "finnish": "fi",
     # French
-    'fr': 'fr',
-    'french': 'fr',
-
+    "fr": "fr",
+    "french": "fr",
     # Irish
-    'ga': 'ga',
-    'irish': 'ga',
-
+    "ga": "ga",
+    "irish": "ga",
     # Croatian
-    'hr': 'hr',
-    'croatian': 'hr',
-
+    "hr": "hr",
+    "croatian": "hr",
     # Hungarian
-    'hu': 'hu',
-    'hungarian': 'hu',
-
+    "hu": "hu",
+    "hungarian": "hu",
     # Armenian
-    'hy': 'hy',
-    'armenian': 'hy',
-
+    "hy": "hy",
+    "armenian": "hy",
     # Indonesian
-    'id': 'id',
-    'indonesian': 'id',
-
+    "id": "id",
+    "indonesian": "id",
     # Icelandic
-    'is': 'is',
-    'icelandic': 'is',
-
+    "is": "is",
+    "icelandic": "is",
     # Georgian
-    'ka': 'ka',
-    'georgian': 'ka',
-
+    "ka": "ka",
+    "georgian": "ka",
     # Kazakh
-    'kk': 'kk',
-    'kazakh': 'kk',
-
+    "kk": "kk",
+    "kazakh": "kk",
     # Khmer
-    'km': 'km',
-    'khmer': 'km',
-
+    "km": "km",
+    "khmer": "km",
     # Korean
-    'ko': 'ko',
-    'korean': 'ko',
-
+    "ko": "ko",
+    "korean": "ko",
     # Kyrgyz
-    'ky': 'ky',
-    'kyrgyz': 'ky',
-
+    "ky": "ky",
+    "kyrgyz": "ky",
     # Lithuanian
-    'lt': 'lt',
-    'lithuanian': 'lt',
-
+    "lt": "lt",
+    "lithuanian": "lt",
     # Latvian
-    'lv': 'lv',
-    'latvian': 'lv',
-
+    "lv": "lv",
+    "latvian": "lv",
     # Macedonian
-    'mk': 'mk',
-    'macedonian': 'mk',
-
+    "mk": "mk",
+    "macedonian": "mk",
     # Mongolian
-    'mn': 'mn',
-    'mongolian': 'mn',
-
+    "mn": "mn",
+    "mongolian": "mn",
     # Malay
-    'ms': 'ms',
-    'malay': 'ms',
-
+    "ms": "ms",
+    "malay": "ms",
     # Burmese
-    'my': 'my',
-    'burmese': 'my',
-
+    "my": "my",
+    "burmese": "my",
     # Dutch
-    'nl': 'nl',
-    'dutch': 'nl',
-
+    "nl": "nl",
+    "dutch": "nl",
     # Polish
-    'pl': 'pl',
-    'polish': 'pl',
-
+    "pl": "pl",
+    "polish": "pl",
     # Portuguese
-    'pt': 'pt',
-    'portuguese': 'pt',
-
+    "pt": "pt",
+    "portuguese": "pt",
     # Romanian
-    'ro': 'ro',
-    'romanian': 'ro',
-
+    "ro": "ro",
+    "romanian": "ro",
     # Russian
-    'ru': 'ru',
-    'russian': 'ru',
-
+    "ru": "ru",
+    "russian": "ru",
     # Slovak
-    'sk': 'sk',
-    'slovak': 'sk',
-
+    "sk": "sk",
+    "slovak": "sk",
     # Slovenian
-    'sl': 'sl',
-    'slovenian': 'sl',
-
+    "sl": "sl",
+    "slovenian": "sl",
     # Albanian
-    'sq': 'sq',
-    'albanian': 'sq',
-
+    "sq": "sq",
+    "albanian": "sq",
     # Swedish
-    'sv': 'sv',
-    'swedish': 'sv',
-
+    "sv": "sv",
+    "swedish": "sv",
     # Thai
-    'th': 'th',
-    'thai': 'th',
-
+    "th": "th",
+    "thai": "th",
     # Turkish
-    'tr': 'tr',
-    'turkish': 'tr',
-
+    "tr": "tr",
+    "turkish": "tr",
     # Ukrainian
-    'uk': 'uk',
-    'ukrainian': 'uk',
-
+    "uk": "uk",
+    "ukrainian": "uk",
     # Urdu
-    'ur': 'ur',
-    'urdu': 'ur',
-
+    "ur": "ur",
+    "urdu": "ur",
     # Uzbek
-    'uz': 'uz',
-    'uzbek': 'uz',
-
+    "uz": "uz",
+    "uzbek": "uz",
     # Vietnamese
-    'vi': 'vi',
-    'vietnamese': 'vi',
-
+    "vi": "vi",
+    "vietnamese": "vi",
     # Yiddish
-    'yi': 'yi',
-    'yiddish': 'yi',
-
+    "yi": "yi",
+    "yiddish": "yi",
     # English
-    'en': 'en',
-    'english': 'en',
-    'eng': 'en',
-
+    "en": "en",
+    "english": "en",
+    "eng": "en",
     # Spanish
-    'es': 'es',
-    'spanish': 'es',
-
+    "es": "es",
+    "spanish": "es",
     # Italian
-    'it': 'it',
-    'italian': 'it',
-
+    "it": "it",
+    "italian": "it",
     # Japanese
-    'ja': 'ja',
-    'japanese': 'ja',
-
+    "ja": "ja",
+    "japanese": "ja",
     # Arabic
-    'ar': 'ar',
-    'arabic': 'ar',
-
+    "ar": "ar",
+    "arabic": "ar",
     # Hindi
-    'hi': 'hi',
-    'hindi': 'hi',
-
+    "hi": "hi",
+    "hindi": "hi",
     # Swahili
-    'sw': 'sw',
-    'swahili': 'sw',
-
+    "sw": "sw",
+    "swahili": "sw",
     # Tamil
-    'ta': 'ta',
-    'tamil': 'ta',
-
+    "ta": "ta",
+    "tamil": "ta",
     # Telugu
-    'te': 'te',
-    'telugu': 'te',
-
+    "te": "te",
+    "telugu": "te",
     # Amharic
-    'am': 'am',
-    'amharic': 'am',
-
+    "am": "am",
+    "amharic": "am",
     # Maori
-    'mi': 'mi',
-    'maori': 'mi',
-
+    "mi": "mi",
+    "maori": "mi",
     # Nepali
-    'ne': 'ne',
-    'nepali': 'ne',
-
+    "ne": "ne",
+    "nepali": "ne",
     # Sinhala
-    'si': 'si',
-    'sinhala': 'si',
-
+    "si": "si",
+    "sinhala": "si",
     # Lao
-    'lo': 'lo',
-    'laotian': 'lo',
-
+    "lo": "lo",
+    "laotian": "lo",
     # Haitian Creole
-    'ht': 'ht',
-    'haitian': 'ht',
-    'haitian creole': 'ht',
-
+    "ht": "ht",
+    "haitian": "ht",
+    "haitian creole": "ht",
     # Kurdish
-    'ku': 'ku',
-    'kurdish': 'ku',
-
+    "ku": "ku",
+    "kurdish": "ku",
     # Maltese
-    'mt': 'mt',
-    'maltese': 'mt',
-
+    "mt": "mt",
+    "maltese": "mt",
     # Hmong
-    'hmn': 'hmn',
-    'hmong': 'hmn',
-
+    "hmn": "hmn",
+    "hmong": "hmn",
     # Xhosa
-    'xh': 'xh',
-    'xhosa': 'xh',
-
+    "xh": "xh",
+    "xhosa": "xh",
     # Zulu
-    'zu': 'zu',
-    'zulu': 'zu',
-
+    "zu": "zu",
+    "zulu": "zu",
     # Afrikaans
-    'af': 'af',
-    'afrikaans': 'af',
-
+    "af": "af",
+    "afrikaans": "af",
     # Luxembourgish
-    'lb': 'lb',
-    'luxembourgish': 'lb',
-
+    "lb": "lb",
+    "luxembourgish": "lb",
     # Frisian
-    'fy': 'fy',
-    'frisian': 'fy',
-
+    "fy": "fy",
+    "frisian": "fy",
     # Hausa
-    'ha': 'ha',
-    'hausa': 'ha',
-
+    "ha": "ha",
+    "hausa": "ha",
     # Igbo
-    'ig': 'ig',
-    'igbo': 'ig',
-
+    "ig": "ig",
+    "igbo": "ig",
     # Yoruba
-    'yo': 'yo',
-    'yoruba': 'yo',
-
+    "yo": "yo",
+    "yoruba": "yo",
     # Cebuano
-    'ceb': 'ceb',
-    'cebuano': 'ceb',
-
+    "ceb": "ceb",
+    "cebuano": "ceb",
     # Sundanese
-    'su': 'su',
-    'sundanese': 'su',
-
+    "su": "su",
+    "sundanese": "su",
     # Somali
-    'so': 'so',
-    'somali': 'so',
-
+    "so": "so",
+    "somali": "so",
     # Pashto
-    'ps': 'ps',
-    'pashto': 'ps',
-
+    "ps": "ps",
+    "pashto": "ps",
     # Chichewa
-    'ny': 'ny',
-    'chichewa': 'ny',
-    'nyanja': 'ny',
-
+    "ny": "ny",
+    "chichewa": "ny",
+    "nyanja": "ny",
     # Galician
-    'gl': 'gl',
-    'galician': 'gl',
-
+    "gl": "gl",
+    "galician": "gl",
     # Catalan
-    'ca': 'ca',
-    'catalan': 'ca',
-
+    "ca": "ca",
+    "catalan": "ca",
     # Corsican
-    'co': 'co',
-    'corsican': 'co',
-
+    "co": "co",
+    "corsican": "co",
     # Esperanto
-    'eo': 'eo',
-    'esperanto': 'eo',
-
+    "eo": "eo",
+    "esperanto": "eo",
     # Hawaiian
-    'haw': 'haw',
-    'hawaiian': 'haw',
-
+    "haw": "haw",
+    "hawaiian": "haw",
     # Samoan
-    'sm': 'sm',
-    'samoan': 'sm',
-
+    "sm": "sm",
+    "samoan": "sm",
     # Scots Gaelic
-    'gd': 'gd',
-    'scots gaelic': 'gd',
-    'scottish gaelic': 'gd',
-
+    "gd": "gd",
+    "scots gaelic": "gd",
+    "scottish gaelic": "gd",
     # Sesotho
-    'st': 'st',
-    'sesotho': 'st',
-    'southern sotho': 'st',
-
+    "st": "st",
+    "sesotho": "st",
+    "southern sotho": "st",
     # Shona
-    'sn': 'sn',
-    'shona': 'sn',
-
+    "sn": "sn",
+    "shona": "sn",
     # Sindhi
-    'sd': 'sd',
-    'sindhi': 'sd',
-
+    "sd": "sd",
+    "sindhi": "sd",
     # Tajik
-    'tg': 'tg',
-    'tajik': 'tg',
-
+    "tg": "tg",
+    "tajik": "tg",
     # Turkmen
-    'tk': 'tk',
-    'turkmen': 'tk',
-
+    "tk": "tk",
+    "turkmen": "tk",
     # Uyghur
-    'ug': 'ug',
-    'uyghur': 'ug',
+    "ug": "ug",
+    "uyghur": "ug",
 }
 
 # Generate emoji_to_lang mapping
-EMOJI_TO_LANG = {emoji: lang for lang, emojis in LANGUAGE_EMOJI_MAP.items() for emoji in emojis}
+EMOJI_TO_LANG = {
+    emoji: lang for lang, emojis in LANGUAGE_EMOJI_MAP.items() for emoji in emojis
+}
 
 # Add any additional language names or mappings here
 ADDITIONAL_LANGUAGE_NAMES = {
-    'en': 'English',
-    'es': 'Spanish',
-    'fr': 'French',
-    'de': 'German',
-    'it': 'Italian',
-    'pt': 'Portuguese',
-    'ru': 'Russian',
-    'ja': 'Japanese',
-    'ko': 'Korean',
-    'zh-CN': 'Chinese (Simplified)',
-    'zh-TW': 'Chinese (Traditional)',
-    'ar': 'Arabic',
-    'hi': 'Hindi',
-    'tr': 'Turkish',
-    'nl': 'Dutch',
-    'pl': 'Polish',
-    'sv': 'Swedish',
-    'da': 'Danish',
-    'fi': 'Finnish',
-    'no': 'Norwegian',
-    'uk': 'Ukrainian',
-    'el': 'Greek',
-    'he': 'Hebrew',
-    'th': 'Thai',
-    'vi': 'Vietnamese',
-    'id': 'Indonesian',
-    'ms': 'Malay',
-    'fa': 'Persian',
-    'bn': 'Bengali',
-    'fil': 'Filipino',
-    'sw': 'Swahili',
-    'am': 'Amharic',
-    'ta': 'Tamil',
-    'te': 'Telugu',
-    'ur': 'Urdu',
+    "en": "English",
+    "es": "Spanish",
+    "fr": "French",
+    "de": "German",
+    "it": "Italian",
+    "pt": "Portuguese",
+    "ru": "Russian",
+    "ja": "Japanese",
+    "ko": "Korean",
+    "zh-CN": "Chinese (Simplified)",
+    "zh-TW": "Chinese (Traditional)",
+    "ar": "Arabic",
+    "hi": "Hindi",
+    "tr": "Turkish",
+    "nl": "Dutch",
+    "pl": "Polish",
+    "sv": "Swedish",
+    "da": "Danish",
+    "fi": "Finnish",
+    "no": "Norwegian",
+    "uk": "Ukrainian",
+    "el": "Greek",
+    "he": "Hebrew",
+    "th": "Thai",
+    "vi": "Vietnamese",
+    "id": "Indonesian",
+    "ms": "Malay",
+    "fa": "Persian",
+    "bn": "Bengali",
+    "fil": "Filipino",
+    "sw": "Swahili",
+    "am": "Amharic",
+    "ta": "Tamil",
+    "te": "Telugu",
+    "ur": "Urdu",
 }

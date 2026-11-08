@@ -1,8 +1,8 @@
 import asyncio
 import inspect
 import socket
-import sys
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -401,7 +401,8 @@ def test_attachment_size_limit_uses_base_default_outside_guild():
 
 def test_video_command_closes_file_and_cleans_request_directory(tmp_path, monkeypatch):
     class FakeTextChannel:
-        pass
+        def __init__(self):
+            self.send = AsyncMock()
 
     monkeypatch.setattr(videodownload.discord, "TextChannel", FakeTextChannel)
     monkeypatch.setenv("BOT_DATA_DIR", str(tmp_path))
@@ -415,7 +416,58 @@ def test_video_command_closes_file_and_cleans_request_directory(tmp_path, monkey
 
     monkeypatch.setattr(videodownload, "download_video_for_discord", download)
     interaction = SimpleNamespace(
-        response=SimpleNamespace(defer=AsyncMock()),
+        response=SimpleNamespace(defer=AsyncMock(), is_done=Mock(return_value=True)),
+        followup=SimpleNamespace(send=AsyncMock()),
+        channel=FakeTextChannel(),
+        user=SimpleNamespace(id=42, mention="<@42>"),
+        filesize_limit=1024,
+        edit_original_response=AsyncMock(),
+    )
+    cog = videodownload.VideoDownload(SimpleNamespace())
+    command = type(cog).download_video
+
+    asyncio.run(
+        command.callback(
+            cog,
+            interaction,
+            "https://youtube.com/watch?v=test",
+        )
+    )
+
+    interaction.response.defer.assert_awaited_once_with(ephemeral=True)
+    interaction.channel.send.assert_awaited_once()
+    interaction.edit_original_response.assert_awaited_once_with(
+        content="Your video was sent to the channel."
+    )
+    interaction.edit_original_response.return_value.delete.assert_awaited_once_with(
+        delay=10
+    )
+    sent_file = interaction.channel.send.await_args.kwargs["file"]
+    assert sent_file.fp.closed
+    assert downloaded_paths and not downloaded_paths[0].exists()
+    assert list(cog.download_dir.iterdir()) == []
+
+
+def test_video_command_send_failure_closes_file_and_cleans_request_directory(
+    tmp_path, monkeypatch
+):
+    class FakeTextChannel:
+        def __init__(self):
+            self.send = AsyncMock(side_effect=RuntimeError("send failed"))
+
+    monkeypatch.setattr(videodownload.discord, "TextChannel", FakeTextChannel)
+    monkeypatch.setenv("BOT_DATA_DIR", str(tmp_path))
+    downloaded_paths = []
+
+    def download(*args):
+        video_path = Path(args[1]) / "download.mp4"
+        video_path.write_bytes(b"video")
+        downloaded_paths.append(video_path)
+        return str(video_path)
+
+    monkeypatch.setattr(videodownload, "download_video_for_discord", download)
+    interaction = SimpleNamespace(
+        response=SimpleNamespace(defer=AsyncMock(), is_done=Mock(return_value=True)),
         followup=SimpleNamespace(send=AsyncMock()),
         channel=FakeTextChannel(),
         user=SimpleNamespace(id=42, mention="<@42>"),
@@ -432,54 +484,13 @@ def test_video_command_closes_file_and_cleans_request_directory(tmp_path, monkey
         )
     )
 
-    interaction.response.defer.assert_awaited_once()
-    interaction.followup.send.assert_awaited_once()
-    sent_file = interaction.followup.send.await_args.kwargs["file"]
-    assert sent_file.fp.closed
-    assert downloaded_paths and not downloaded_paths[0].exists()
-    assert list(cog.download_dir.iterdir()) == []
-
-
-def test_video_command_send_failure_closes_file_and_cleans_request_directory(
-    tmp_path, monkeypatch
-):
-    class FakeTextChannel:
-        pass
-
-    monkeypatch.setattr(videodownload.discord, "TextChannel", FakeTextChannel)
-    monkeypatch.setenv("BOT_DATA_DIR", str(tmp_path))
-    downloaded_paths = []
-
-    def download(*args):
-        video_path = Path(args[1]) / "download.mp4"
-        video_path.write_bytes(b"video")
-        downloaded_paths.append(video_path)
-        return str(video_path)
-
-    monkeypatch.setattr(videodownload, "download_video_for_discord", download)
-    interaction = SimpleNamespace(
-        response=SimpleNamespace(defer=AsyncMock()),
-        followup=SimpleNamespace(
-            send=AsyncMock(side_effect=[RuntimeError("send failed"), None])
-        ),
-        channel=FakeTextChannel(),
-        user=SimpleNamespace(id=42, mention="<@42>"),
-        filesize_limit=1024,
-    )
-    cog = videodownload.VideoDownload(SimpleNamespace())
-    command = type(cog).download_video
-
-    asyncio.run(
-        command.callback(
-            cog,
-            interaction,
-            "https://youtube.com/watch?v=test",
-        )
-    )
-
-    assert interaction.followup.send.await_count == 2
-    assert interaction.followup.send.await_args.kwargs["ephemeral"] is True
-    sent_file = interaction.followup.send.await_args_list[0].kwargs["file"]
+    assert interaction.followup.send.await_count == 1
+    assert interaction.followup.send.await_args.kwargs == {
+        "ephemeral": True,
+        "delete_after": 10,
+    }
+    interaction.response.defer.assert_awaited_once_with(ephemeral=True)
+    sent_file = interaction.channel.send.await_args.kwargs["file"]
     assert sent_file.fp.closed
     assert downloaded_paths and not downloaded_paths[0].exists()
     assert list(cog.download_dir.iterdir()) == []

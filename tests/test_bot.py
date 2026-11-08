@@ -61,9 +61,9 @@ class BotLifecycleTests(unittest.IsolatedAsyncioTestCase):
                 "load_extension",
                 new=AsyncMock(side_effect=RuntimeError("broken cog")),
             ),
+            self.assertRaisesRegex(RuntimeError, "broken cog"),
         ):
-            with self.assertRaisesRegex(RuntimeError, "broken cog"):
-                await self.bot.load_all_cogs()
+            await self.bot.load_all_cogs()
 
 
 if __name__ == "__main__":

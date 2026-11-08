@@ -48,7 +48,7 @@ class Define(commands.Cog):
             embed.set_footer(text="Source: Merriam-Webster (PyMultiDictionary)")
             return embed
 
-        except Exception as e:
+        except Exception:
             logger.exception("Merriam-Webster lookup failed for %r", word)
             return None
 
