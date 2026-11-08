@@ -1,7 +1,7 @@
 # Discord Bot
 
 ![Production Build Status](https://github.com/d-daemon/discord-bot/actions/workflows/docker-image.yml/badge.svg?branch=main)
-![Python Version](https://img.shields.io/badge/Python-3.9_|_3.10_|_3.11_|_3.12_|_3.13_|_3.14_|_3.15-blue.svg)
+![Python Version](https://img.shields.io/badge/Python-3.10_|_3.11_|_3.12_|_3.13_|_3.14_|_3.15-blue.svg)
 ![License](https://img.shields.io/github/license/d-daemon/discord-bot)
 ![Docker Pulls](https://img.shields.io/docker/pulls/hhxcusco/discord-bot)
 ![Docker Image Size](https://img.shields.io/docker/image-size/hhxcusco/discord-bot/latest)
@@ -9,141 +9,145 @@
 ![GitHub Forks](https://img.shields.io/github/forks/d-daemon/discord-bot)
 ![Last Commit](https://img.shields.io/github/last-commit/d-daemon/discord-bot)
 
-A Discord bot built using `discord.py` for various functionalities such as moderation, fun commands, informational commands, and more. This bot is containerized using Docker and can be easily deployed using Docker and GitHub Actions.
+A `discord.py` bot with moderation, utility, and media commands. Run it with Docker Compose and PostgreSQL.
 
 ## Features
 
-- **Welcome and Goodbye Messages**: Sends welcome messages when a new member joins and goodbye messages when a member leaves.
-- **Bot Personalization**: Customize the bot's status, activity, and profile picture.
-- **Moderation Commands**: Includes commands like kick and ban.
-- **Fun Commands**: Commands like dice rolling and jokes.
-- **Informational Commands**: Commands to fetch user information.
-- **Video Download Commands**: Download videos from various platforms including Instagram, YouTube, TikTok, Facebook, and more.
-- **Photo Download Command**: Download photos from Instagram.
+- Welcome and goodbye messages, configured by text-channel name.
+- Moderation commands, including kick and ban, with Discord permission checks.
+- Fun and information commands, including dice rolls, jokes, and user details.
+- Video and Instagram photo downloads.
+- Translation and currency conversion commands.
+- Optional cogs for greetings and bot personalization. These are not loaded by default.
 
-## Setup Instructions
+## Using the bot
 
-### Prerequisites
+### Requirements
 
-- Python 3.10+
 - Docker
-- Docker Compose (optional, for easier deployment)
-- [GitHub account](https://github.com/)
-- [Docker Hub account](https://hub.docker.com/)
+- A Discord bot token
 
-### Local Development
+In the [Discord Developer Portal](https://discord.com/developers/applications), enable the **Server Members Intent** and **Message Content Intent** for the bot. Invite it to your server with the `bot` and `applications.commands` scopes and the permissions needed for the commands you plan to use.
 
-1. **Clone the Repository**:
+For example, welcome messages need permission to view and send messages in their configured channels, and moderation commands need the corresponding moderation permissions.
+
+### Run with Docker Compose
+
+1. Clone the repository and prepare its environment file:
 
    ```bash
-    git clone https://github.com/d-daemon/discord-bot.git
-    cd discord-bot
-    ```
+   git clone https://github.com/d-daemon/discord-bot.git
+   cd discord-bot
+   cp .env.example .env
+   ```
 
-2. Install Dependencies:
+2. Create three directories for the bot and postgres database:
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+   ```bash
+   mkdir data config db
+   ```
 
-3. Set Environment Variables:
+3. Edit `.env` and set `DISCORD_BOT_TOKEN`, `POSTGRES_DB`, `POSTGRES_USER`, a strong `POSTGRES_PASSWORD`, and `PUID`/`PGID`.
 
-     Create a `.env` file in the root directory with the following content:
+4. Start the bot and its PostgreSQL database:
 
-    ```dotenv
-    # Docker image tag (latest or dev)
-    IMAGE_TAG=latest
+   ```bash
+   docker compose up -d
+   ```
 
-    # PostgreSQL configuration
-    POSTGRES_USER=
-    POSTGRES_PASSWORD=
-    POSTGRES_DB=
+   Compose uses the published `hhxcusco/discord-bot:latest` image. To follow startup or diagnose problems:
 
-    # Discord bot configuration
-    DISCORD_BOT_TOKEN=
-    INSTAGRAM_COOKIES=
+   ```bash
+   docker compose logs -f discord-bot
+   ```
 
-   # Optional translation fallbacks (Google Translate remains the default)
-   DEEPL_API_KEY=
-   MYMEMORY_API_KEY=
-    ```
+5. To update to the latest published image:
 
-    `INSTAGRAM_COOKIES` is optional and can contain an Instagram `sessionid`
-    or a cookie string such as `sessionid=...; csrftoken=...`. Treat these
-    values like passwords. Instagram may require a valid session to access a
-    post. `/ig_photo` uses gallery-dl with the same cookies as Instagram video
-    downloads. Downloads can still fail if Instagram rejects the session or
-    changes its API; check the bot logs for details.
+   ```bash
+   docker compose pull
+   docker compose up -d
+   ```
 
-   Translation tries Google's no-key translation endpoint first, then DeepL
-   API Free when `DEEPL_API_KEY` is configured, and finally MyMemory. MyMemory
-   works without a key at its lower anonymous quota; `MYMEMORY_API_KEY` enables
-   authenticated requests. Public translation endpoints may rate-limit requests.
-   API keys should be treated like passwords.
+### Configure the bot
 
-### GitHub Actions and Docker Hub
+Edit `config/config.json`to set the command prefix and the names of the text channels used for welcome and goodbye messages. For example:
 
-1. Set Up GitHub Secrets:
+```json
+{
+  "prefix": "!",
+  "welcome_channel": "general",
+  "goodbye_channel": "general"
+}
+```
 
-   Go to your repository on GitHub and add the following secrets:
+The config directory is mounted into the container. Restart the bot after changing the file:
 
-     - `DOCKER_USERNAME`: Your Docker Hub username.
-     - `DOCKER_PASSWORD`: Your Docker Hub password or access token.
+```bash
+docker compose restart discord-bot
+```
 
-   Only the Docker Hub secrets are needed by the workflow. The bot and PostgreSQL settings belong in the `.env` file on the host that runs Compose.
+Optional environment settings:
 
-2. The Workflow:
-
-   [`.github/workflows/docker-image.yml`](.github/workflows/docker-image.yml) builds and publishes the image on every push to `main` or `dev` (and can be run manually from the Actions tab). It does not deploy the bot.
-
-   | Branch | Published tags |
-   | ------ | -------------- |
-   | `main` | `latest`, `sha-<short-sha>` |
-   | `dev`  | `dev`, `sha-<short-sha>` |
-
-### Docker Compose
-
-1. Review [`compose.yml`](compose.yml). It runs PostgreSQL and the bot, using the image `hhxcusco/discord-bot:${IMAGE_TAG:-latest}`.
-
-2. Choose the image tag with `IMAGE_TAG` in your `.env` file (see `.env.example`), or inline:
-
-     ```bash
-     # Production image (default)
-     docker compose up -d
-
-     # Dev image
-     IMAGE_TAG=dev docker compose up -d
-     ```
-
-3. To build the image locally instead of pulling it:
-
-      ```bash
-      docker build -t hhxcusco/discord-bot:local .
-      IMAGE_TAG=local docker compose up -d
-      ```
-
-4. Update the config.json in the `config` folder:
-
-      ```json
-      {
-       "prefix": "!",
-       "welcome_channel": "town-square",
-       "goodbye_channel": "town-square"
-      }
-      ```
-
-5. Restart the container for the changes to take effect.
+- `INSTAGRAM_COOKIES`: Instagram session cookies may be needed to download some posts.
+- `DEEPL_API_KEY` and `MYMEMORY_API_KEY`: optional translation service credentials. Translation uses Google's no-key endpoint first, then DeepL when configured, then MyMemory. MyMemory can also be used without a key, subject to its lower anonymous quota. Public endpoints may rate-limit requests.
 
 ## Contributing
 
-1. Fork the repository.
-2. Create a new branch (`git checkout -b feature/YourFeature`).
-3. Commit your changes (`git commit -m 'Add Your Feature'`).
-4. Push to the branch (`git push origin feature/YourFeature`).
-5. Create a new Pull Request.
+This section is for people contributing to the repository.
+
+### Development setup
+
+The project supports Python `>=3.10, <3.16`. It uses [uv](https://docs.astral.sh/uv/) and the committed `uv.lock` to manage development dependencies.
+
+1. Clone the repository and install the development dependencies:
+
+   ```bash
+   git clone https://github.com/d-daemon/discord-bot.git
+   cd discord-bot
+   uv sync --group dev
+   ```
+
+2. Create three directories for the bot and postgres database:
+
+   ```bash
+   mkdir data config db
+   ```
+
+3. To run the bot locally, ensure your `.env` file is created and run:
+
+   ```bash
+   docker compose -f compose.local.yml up --build -d
+   ```
+
+4. Run the tests and linter before submitting changes:
+
+   ```bash
+   uv run python -m pytest
+   uv run ruff check .
+   ```
+
+### Docker image workflow
+
+![Production Build Status](https://github.com/d-daemon/discord-bot/actions/workflows/docker-image.yml/badge.svg?branch=main)
+
+The [Docker image workflow](.github/workflows/docker-image.yml) builds and publishes the image to Docker Hub on pushes to `main` or `dev`, and can also be run manually from the Actions tab. It publishes these tags:
+
+| Branch | Published tags              |
+| ------ | --------------------------- |
+| `main` | `latest`, `sha-<short-sha>` |
+| `dev`  | `dev`, `sha-<short-sha>`    |
+
+This workflow publishes an image; it does not deploy or run the bot.
+
+Repository maintainers need to configure the `DOCKER_USERNAME` and `DOCKER_PASSWORD` GitHub Actions secrets for Docker Hub publishing. These are contributor/maintainer settings, not bot runtime settings.
+
+### Submit a change
+
+1. Fork the repository and create a branch for your change.
+2. Make your changes and run the tests and linter above.
+3. Commit and push your branch.
+4. Open a pull request.
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](https://github.com/d-daemon/discord-bot/blob/main/LICENSE) file for more information.
-
-This README covers setting up and running the bot locally and in Docker, and publishing its image with GitHub Actions and Docker Hub.
+This project is licensed under the MIT License. See [LICENSE](LICENSE).

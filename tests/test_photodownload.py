@@ -349,7 +349,7 @@ class PhotoDownloadTests(unittest.TestCase):
             asyncio.run(view.on_timeout())
 
         interaction.response.edit_message.assert_awaited_once_with(
-            content="Photo selection canceled.", view=None
+            content="Photo selection canceled.", view=None, delete_after=5
         )
         interaction.message.delete.assert_awaited_once_with(delay=5)
         self.assertFalse(request_dir.exists())
@@ -421,7 +421,7 @@ class PhotoDownloadTests(unittest.TestCase):
 
         self.assertEqual(
             interaction.followup.send.await_args.args[0],
-            "Choose images to send. The selection menu lists up to 20 images.",
+            "Choose image(s) to download.",
         )
 
     @patch.object(photodownload.subprocess, "run")
