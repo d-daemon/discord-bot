@@ -523,7 +523,7 @@ class VideoDownload(commands.Cog):
     )
     @app_commands.describe(url="URL of the video to download")
     async def download_video(self, interaction: discord.Interaction, url: str):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         channel = interaction.channel
         if not isinstance(channel, (discord.TextChannel, discord.Thread)):
             await interaction.followup.send(
@@ -568,9 +568,12 @@ class VideoDownload(commands.Cog):
 
             file = discord.File(video_path, filename=os.path.basename(video_path))
             try:
-                await interaction.followup.send(
+                await channel.send(
                     f"{interaction.user.mention} Here is your downloaded video.",
                     file=file,
+                )
+                await interaction.edit_original_response(
+                    content="Your video was sent to the channel."
                 )
             finally:
                 file.close()

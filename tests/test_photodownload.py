@@ -22,6 +22,173 @@ class PhotoDownloadTests(unittest.TestCase):
         sleep_patcher.start()
         self.addCleanup(sleep_patcher.stop)
 
+    def test_single_photo_download_completes_private_response(self):
+        interaction = SimpleNamespace(
+            response=SimpleNamespace(defer=AsyncMock()),
+            followup=SimpleNamespace(send=AsyncMock()),
+            channel=SimpleNamespace(send=AsyncMock()),
+            user=SimpleNamespace(id=42, mention="<@42>"),
+            edit_original_response=AsyncMock(),
+        )
+        send_photos = AsyncMock()
+        with (
+            patch.dict(os.environ, {"BOT_DATA_DIR": str(self.download_dir)}),
+            patch.object(
+                photodownload, "download_media_assets", return_value=["photo.jpg"]
+            ),
+            patch.object(photodownload, "send_photos", new=send_photos),
+        ):
+            cog = photodownload.PhotoDownload(SimpleNamespace())
+            asyncio.run(
+                type(cog).download_photo.callback(cog, interaction, URL)
+            )
+
+        interaction.response.defer.assert_awaited_once_with(ephemeral=True)
+        interaction.edit_original_response.assert_awaited_once_with(
+            content="Your photos were sent to the channel."
+        )
+        send_photos.assert_awaited_once()
+
+    def test_photo_selection_error_remains_ephemeral_after_defer(self):
+        request_dir = self.download_dir / "request"
+        request_dir.mkdir()
+        owner = SimpleNamespace(id=42, mention="<@42>")
+        original_interaction = SimpleNamespace(
+            channel=SimpleNamespace(send=AsyncMock()), user=owner
+        )
+        view = photodownload.PhotoSelectionView(
+            original_interaction, ["photo.jpg"], request_dir
+        )
+        selection = view.children[0]
+        selection._values = ["0"]
+        interaction = SimpleNamespace(
+            response=SimpleNamespace(defer=AsyncMock()),
+            user=owner,
+            followup=SimpleNamespace(send=AsyncMock()),
+            edit_original_response=AsyncMock(),
+            message=SimpleNamespace(delete=AsyncMock()),
+        )
+
+        with patch.object(
+            photodownload,
+            "send_photos",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("send failed"),
+        ):
+            asyncio.run(selection.callback(interaction))
+
+        interaction.response.defer.assert_awaited_once_with(
+            ephemeral=True, thinking=True
+        )
+        interaction.followup.send.assert_awaited_once_with(
+            "The selected photos could not be sent.", ephemeral=True
+        )
+
+    @patch.object(photodownload.subprocess, "run")
+    @patch.object(photodownload.shutil, "which", return_value="/usr/bin/gallery-dl")
+    def test_carousel_photos_and_selection_follow_post_order(self, which, run):
+        def gallery_dl(command, **kwargs):
+            self.assertEqual(
+                command[command.index("--filename") + 1], "{num:02}.{extension}"
+            )
+            output = Path(command[command.index("-d") + 1]) / "instagram"
+            output.mkdir()
+            for position in (3, 1, 2):
+                (output / f"{position:02}.jpg").write_bytes(
+                    f"photo {position}".encode()
+                )
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        run.side_effect = gallery_dl
+        with patch.dict(os.environ, {"INSTAGRAM_COOKIES": ""}):
+            photos = photodownload.download_instagram_photos(
+                URL, str(self.download_dir)
+            )
+
+        self.assertEqual(
+            [Path(photo).read_bytes() for photo in photos],
+            [b"photo 1", b"photo 2", b"photo 3"],
+        )
+        owner = SimpleNamespace(id=42, mention="<@42>")
+        original = SimpleNamespace(channel=SimpleNamespace(), user=owner)
+        view = photodownload.PhotoSelectionView(original, photos, self.download_dir)
+        selection = view.children[0]
+        self.assertEqual(
+            [(option.label, option.value) for option in selection.options],
+            [("Image 1", "0"), ("Image 2", "1"), ("Image 3", "2")],
+        )
+        interaction = SimpleNamespace(
+            response=SimpleNamespace(defer=AsyncMock()),
+            edit_original_response=AsyncMock(),
+            followup=SimpleNamespace(send=AsyncMock()),
+            message=SimpleNamespace(delete=AsyncMock()),
+        )
+        with (
+            patch.object(photodownload, "send_photos", new_callable=AsyncMock) as send,
+            patch.object(view, "cleanup", new_callable=AsyncMock),
+        ):
+            for index in range(3):
+                with self.subTest(index=index):
+                    selection._values = [str(index)]
+                    asyncio.run(selection.callback(interaction))
+                    self.assertEqual(
+                        Path(send.await_args.args[2][0]).read_bytes(),
+                        f"photo {index + 1}".encode(),
+                    )
+
+    @patch.object(photodownload.subprocess, "run")
+    @patch.object(photodownload.shutil, "which", return_value="/usr/bin/gallery-dl")
+    def test_twenty_carousel_photos_remain_in_numeric_order(self, which, run):
+        def gallery_dl(command, **kwargs):
+            output = Path(command[command.index("-d") + 1]) / "instagram"
+            output.mkdir()
+            for position in range(20, 0, -1):
+                (output / f"{position:02}.jpg").write_bytes(str(position).encode())
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        run.side_effect = gallery_dl
+        with patch.dict(os.environ, {"INSTAGRAM_COOKIES": ""}):
+            photos = photodownload.download_instagram_photos(
+                URL, str(self.download_dir)
+            )
+        self.assertEqual(
+            [Path(photo).read_bytes() for photo in photos],
+            [str(position).encode() for position in range(1, 21)],
+        )
+
+    def test_selection_is_limited_to_twenty_images(self):
+        owner = SimpleNamespace(id=42, mention="<@42>")
+        original = SimpleNamespace(channel=SimpleNamespace(), user=owner)
+        photos = [f"photo-{index}.jpg" for index in range(25)]
+        view = photodownload.PhotoSelectionView(original, photos, self.download_dir)
+        selection = view.children[0]
+        self.assertEqual(len(selection.options), 20)
+        self.assertEqual(selection.max_values, 20)
+        self.assertEqual(selection.options[-1].label, "Image 20")
+
+    def test_carousel_prompt_states_twenty_image_limit(self):
+        interaction = SimpleNamespace(
+            response=SimpleNamespace(defer=AsyncMock()),
+            followup=SimpleNamespace(send=AsyncMock()),
+            channel=SimpleNamespace(send=AsyncMock()),
+            user=SimpleNamespace(id=42, mention="<@42>"),
+        )
+        with (
+            patch.dict(os.environ, {"BOT_DATA_DIR": str(self.download_dir)}),
+            patch.object(
+                photodownload,
+                "download_media_assets",
+                return_value=["photo-1.jpg", "photo-2.jpg"],
+            ),
+        ):
+            cog = photodownload.PhotoDownload(SimpleNamespace())
+            asyncio.run(type(cog).download_photo.callback(cog, interaction, URL))
+
+        self.assertEqual(
+            interaction.followup.send.await_args.args[0],
+            "Choose images to send. The selection menu lists up to 20 images.",
+        )
+
     @patch.object(photodownload.subprocess, "run")
     @patch.object(photodownload.shutil, "which", return_value="/usr/bin/gallery-dl")
     def test_gallery_dl_downloads_only_photos_and_preserves_existing_files(

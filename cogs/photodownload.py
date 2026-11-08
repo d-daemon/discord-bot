@@ -115,6 +115,7 @@ def download_photos_via_gallery_dl(post_url, download_dir):
         post_url, download_dir, is_instagram=True
     )
     command[0] = gallery_dl
+    command[-1:-1] = ["--filename", "{num:02}.{extension}"]
     try:
         completed = subprocess.run(
             command, capture_output=True, text=True, timeout=600, check=False
@@ -195,7 +196,7 @@ class PhotoSelection(discord.ui.Select):
         photo_paths = selection_view.photo_paths
         options = [
             discord.SelectOption(label=f"Image {index + 1}", value=str(index))
-            for index in range(min(len(photo_paths), 25))
+            for index in range(min(len(photo_paths), 20))
         ]
         super().__init__(
             placeholder="Choose images to download",
@@ -205,7 +206,7 @@ class PhotoSelection(discord.ui.Select):
         )
 
     async def callback(self, interaction):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True, thinking=True)
         selected_photos = [
             self.selection_view.photo_paths[int(index)] for index in self.values
         ]
@@ -215,6 +216,9 @@ class PhotoSelection(discord.ui.Select):
                 self.selection_view.interaction.user,
                 selected_photos,
                 f"{self.selection_view.interaction.user.mention} Here are your selected photos:",
+            )
+            await interaction.edit_original_response(
+                content="Your photos were sent to the channel."
             )
         except Exception:
             logger.exception("Failed to send selected photos")
@@ -262,7 +266,7 @@ class PhotoDownload(commands.Cog):
             if len(photo_paths) > 1:
                 view = PhotoSelectionView(interaction, photo_paths, request_dir)
                 prompt = (
-                    "Choose images to send. The selection menu lists up to 25 images."
+                    "Choose image(s) to send."
                 )
                 view.prompt_message = await interaction.followup.send(
                     prompt, view=view, ephemeral=True, wait=True
@@ -276,14 +280,17 @@ class PhotoDownload(commands.Cog):
                 photo_paths,
                 f"{interaction.user.mention} Here is your downloaded photo:",
             )
+            await interaction.edit_original_response(
+                content="Your photos were sent to the channel."
+            )
         except ValueError:
             await interaction.followup.send(
-                "Use a valid public video URL or Instagram photo URL.", ephemeral=True
+                "Use a valid Instagram photo or video URL from a public post.", ephemeral=True
             )
         except Exception:
-            logger.exception("Failed to download or send Instagram photos")
+            logger.exception("Failed to download or send Instagram photo(s)")
             await interaction.followup.send(
-                "The photos could not be downloaded or sent. Please try again later.",
+                "The photos could not be downloaded or sent.",
                 ephemeral=True,
             )
         finally:
