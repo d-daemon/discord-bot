@@ -2,8 +2,10 @@ import base64
 import logging
 
 import discord
-from discord.ext import commands
 from discord import app_commands
+from discord.ext import commands
+
+from utils.helpers import send_ephemeral
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +45,8 @@ class Personalization(commands.Cog):
     ):
         await interaction.response.defer(ephemeral=True)
         if interaction.guild is None:
-            await interaction.followup.send(
-                "This command can only be used in a server.", ephemeral=True
+            await send_ephemeral(
+                interaction, "This command can only be used in a server."
             )
             return
 
@@ -65,29 +67,25 @@ class Personalization(commands.Cog):
         normalized_activity = activity_type.lower() if activity_type else None
 
         if normalized_status and normalized_status not in status_map:
-            await interaction.followup.send(
-                "Choose online, idle, dnd, or invisible.", ephemeral=True
-            )
+            await send_ephemeral(interaction, "Choose online, idle, dnd, or invisible.")
             return
         if normalized_activity and normalized_activity not in activity_map:
-            await interaction.followup.send(
+            await send_ephemeral(
+                interaction,
                 "Choose playing, streaming, listening, watching, or competing.",
-                ephemeral=True,
             )
             return
         if bool(normalized_activity) != bool(activity_text):
-            await interaction.followup.send(
-                "Provide both an activity type and activity text.", ephemeral=True
+            await send_ephemeral(
+                interaction, "Provide both an activity type and activity text."
             )
             return
         if name is not None and (not name.strip() or len(name) > 32):
-            await interaction.followup.send(
-                "Nickname must be 1 to 32 characters.", ephemeral=True
-            )
+            await send_ephemeral(interaction, "Nickname must be 1 to 32 characters.")
             return
         if activity_text and len(activity_text) > 128:
-            await interaction.followup.send(
-                "Activity text must be 128 characters or fewer.", ephemeral=True
+            await send_ephemeral(
+                interaction, "Activity text must be 128 characters or fewer."
             )
             return
 
@@ -116,15 +114,15 @@ class Personalization(commands.Cog):
             logger.exception(
                 "Personalization update failed in guild %s", interaction.guild_id
             )
-            await interaction.followup.send(
+            await send_ephemeral(
+                interaction,
                 "The personalization update failed. Check bot permissions and try again.",
-                ephemeral=True,
             )
             return
         except Exception:
             logger.exception("Could not save personalization settings")
-            await interaction.followup.send(
-                "The personalization settings could not be saved.", ephemeral=True
+            await send_ephemeral(
+                interaction, "The personalization settings could not be saved."
             )
             return
 
@@ -137,12 +135,12 @@ class Personalization(commands.Cog):
             changes.append(f"Activity set to: {activity_type} {activity_text}")
 
         if changes:
-            await interaction.followup.send(
-                "Bot personalization updated:\n" + "\n".join(changes), ephemeral=True
+            await send_ephemeral(
+                interaction, "Bot personalization updated:\n" + "\n".join(changes)
             )
         else:
-            await interaction.followup.send(
-                "No changes were made to the bot's personalization.", ephemeral=True
+            await send_ephemeral(
+                interaction, "No changes were made to the bot's personalization."
             )
 
     @personalize.autocomplete("status")
@@ -176,9 +174,7 @@ class Personalization(commands.Cog):
             not (avatar.content_type or "").startswith("image/")
             or avatar.size > 10 * 1024 * 1024
         ):
-            await interaction.followup.send(
-                "Please upload an image file.", ephemeral=True
-            )
+            await send_ephemeral(interaction, "Please upload an image file.")
             return
 
         try:
@@ -188,20 +184,14 @@ class Personalization(commands.Cog):
             await self.store_settings([("avatar", avatar_base64, 0)])
         except (discord.Forbidden, discord.HTTPException):
             logger.exception("Bot avatar update failed")
-            await interaction.followup.send(
-                "The avatar could not be updated.", ephemeral=True
-            )
+            await send_ephemeral(interaction, "The avatar could not be updated.")
             return
         except Exception:
             logger.exception("Could not save the bot avatar")
-            await interaction.followup.send(
-                "The avatar could not be saved.", ephemeral=True
-            )
+            await send_ephemeral(interaction, "The avatar could not be saved.")
             return
 
-        await interaction.followup.send(
-            "Bot avatar updated successfully!", ephemeral=True
-        )
+        await send_ephemeral(interaction, "Bot avatar updated successfully!")
 
 
 async def setup(bot):

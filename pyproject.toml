@@ -16,3 +16,12 @@ dependencies = [
     "requests>=2.23.0",
     "yt-dlp>=2025.4.30",
 ]
+
+[dependency-groups]
+lint = [
+    "ruff>=0.17.4",
+]
+dev = [
+    "pytest>=9.2.0",
+    {include-group = "lint"}
+]

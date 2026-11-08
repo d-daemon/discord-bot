@@ -20,7 +20,11 @@ from cogs.videodownload import (
     resolve_video_platform,
     write_instagram_cookie_file,
 )
-from utils.helpers import do_sleep
+from utils.helpers import (
+    do_sleep,
+    edit_ephemeral_response,
+    send_ephemeral,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -152,13 +156,13 @@ class PhotoSelectionView(discord.ui.View):
         self.request_dir = request_dir
         self.prompt_message: discord.WebhookMessage | None = None
         self.cleaned = False
+        self.action_started = False
         self.add_item(PhotoSelection(self))
+        self.add_item(PhotoSelectionCancel(self))
 
     async def interaction_check(self, interaction):
         if interaction.user.id != self.interaction.user.id:
-            await interaction.response.send_message(
-                "This image selection is not for you.", ephemeral=True
-            )
+            await send_ephemeral(interaction, "This image selection is not for you.")
             return False
         return True
 
@@ -169,7 +173,15 @@ class PhotoSelectionView(discord.ui.View):
         self.stop()
         await asyncio.to_thread(shutil.rmtree, self.request_dir, True)
 
+    def claim_action(self):
+        if self.action_started:
+            return False
+        self.action_started = True
+        return True
+
     async def on_timeout(self):
+        if not self.claim_action():
+            return
         try:
             await send_photos(
                 self.interaction.channel,
@@ -190,6 +202,31 @@ class PhotoSelectionView(discord.ui.View):
                     logger.exception("Failed to delete the expired photo selection")
 
 
+class PhotoSelectionCancel(discord.ui.Button):
+    def __init__(self, selection_view):
+        self.selection_view = selection_view
+        super().__init__(label="Cancel", style=discord.ButtonStyle.secondary)
+
+    async def callback(self, interaction):
+        if not self.selection_view.claim_action():
+            await send_ephemeral(
+                interaction,
+                "This image selection has already been completed.",
+                delete_after=5,
+            )
+            return
+        try:
+            await interaction.response.edit_message(
+                content="Photo selection canceled.", view=None, delete_after=5
+            )
+            if interaction.message is not None:
+                await interaction.message.delete(delay=5)
+        except discord.HTTPException:
+            logger.exception("Failed to update the canceled photo selection")
+        finally:
+            await self.selection_view.cleanup()
+
+
 class PhotoSelection(discord.ui.Select):
     def __init__(self, selection_view):
         self.selection_view = selection_view
@@ -199,40 +236,55 @@ class PhotoSelection(discord.ui.Select):
             for index in range(min(len(photo_paths), 20))
         ]
         super().__init__(
-            placeholder="Choose images to download",
+            placeholder="Choose images to download.",
             min_values=1,
             max_values=len(options),
             options=options,
         )
 
     async def callback(self, interaction):
+        if not self.selection_view.claim_action():
+            await send_ephemeral(
+                interaction,
+                "This image selection has already been completed.",
+                delete_after=5,
+            )
+            return
         await interaction.response.defer(ephemeral=True, thinking=True)
         selected_photos = [
             self.selection_view.photo_paths[int(index)] for index in self.values
         ]
+        singular = len(selected_photos) == 1
+        photo = "photo" if singular else "photos"
+        verb = "was" if singular else "were"
+        here = "Here is" if singular else "Here are"
+        photos_sent = False
         try:
             await send_photos(
                 self.selection_view.interaction.channel,
                 self.selection_view.interaction.user,
                 selected_photos,
-                f"{self.selection_view.interaction.user.mention} Here are your selected photos:",
+                f"{self.selection_view.interaction.user.mention} {here} your selected {photo}:",
             )
-            await interaction.edit_original_response(
-                content="Your photos were sent to the channel."
+            photos_sent = True
+            await edit_ephemeral_response(
+                interaction, f"Your {photo} {verb} sent to the channel."
             )
         except Exception:
             logger.exception("Failed to send selected photos")
             try:
-                await interaction.followup.send(
-                    "The selected photos could not be sent.", ephemeral=True
+                await send_ephemeral(
+                    interaction, f"The selected {photo} could not be sent."
                 )
             except discord.HTTPException:
                 logger.exception("Failed to report the photo send error")
         finally:
             await self.selection_view.cleanup()
-            if interaction.message is not None:
+            if self.selection_view.prompt_message is not None:
                 try:
-                    await interaction.message.delete()
+                    if photos_sent:
+                        await asyncio.sleep(3)
+                    await self.selection_view.prompt_message.delete()
                 except discord.NotFound:
                     pass
                 except discord.HTTPException:
@@ -251,9 +303,7 @@ class PhotoDownload(commands.Cog):
     @app_commands.describe(url="Instagram photo post or video URL")
     async def download_photo(self, interaction: discord.Interaction, url: str):
         await interaction.response.defer(ephemeral=True)
-        logger.info(
-            "User %s requested a photo or video cover download", interaction.user.id
-        )
+        logger.info("User %s requested a photo download: %s", interaction.user, url)
         request_dir = None
         try:
             request_dir = Path(
@@ -265,9 +315,7 @@ class PhotoDownload(commands.Cog):
 
             if len(photo_paths) > 1:
                 view = PhotoSelectionView(interaction, photo_paths, request_dir)
-                prompt = (
-                    "Choose image(s) to send."
-                )
+                prompt = "Choose image(s) to download."
                 view.prompt_message = await interaction.followup.send(
                     prompt, view=view, ephemeral=True, wait=True
                 )
@@ -280,18 +328,18 @@ class PhotoDownload(commands.Cog):
                 photo_paths,
                 f"{interaction.user.mention} Here is your downloaded photo:",
             )
-            await interaction.edit_original_response(
-                content="Your photos were sent to the channel."
+            await edit_ephemeral_response(
+                interaction, "Your photo was sent to the channel."
             )
         except ValueError:
-            await interaction.followup.send(
-                "Use a valid Instagram photo or video URL from a public post.", ephemeral=True
+            await send_ephemeral(
+                interaction,
+                "Use a valid Instagram photo or video URL from a public post.",
             )
         except Exception:
-            logger.exception("Failed to download or send Instagram photo(s)")
-            await interaction.followup.send(
-                "The photos could not be downloaded or sent.",
-                ephemeral=True,
+            logger.exception("Failed to download or send photos")
+            await send_ephemeral(
+                interaction, "The photos could not be downloaded or sent."
             )
         finally:
             if request_dir is not None:

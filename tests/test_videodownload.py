@@ -1,8 +1,8 @@
 import asyncio
 import inspect
 import socket
-import sys
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -416,7 +416,7 @@ def test_video_command_closes_file_and_cleans_request_directory(tmp_path, monkey
 
     monkeypatch.setattr(videodownload, "download_video_for_discord", download)
     interaction = SimpleNamespace(
-        response=SimpleNamespace(defer=AsyncMock()),
+        response=SimpleNamespace(defer=AsyncMock(), is_done=Mock(return_value=True)),
         followup=SimpleNamespace(send=AsyncMock()),
         channel=FakeTextChannel(),
         user=SimpleNamespace(id=42, mention="<@42>"),
@@ -438,6 +438,9 @@ def test_video_command_closes_file_and_cleans_request_directory(tmp_path, monkey
     interaction.channel.send.assert_awaited_once()
     interaction.edit_original_response.assert_awaited_once_with(
         content="Your video was sent to the channel."
+    )
+    interaction.edit_original_response.return_value.delete.assert_awaited_once_with(
+        delay=10
     )
     sent_file = interaction.channel.send.await_args.kwargs["file"]
     assert sent_file.fp.closed
@@ -464,7 +467,7 @@ def test_video_command_send_failure_closes_file_and_cleans_request_directory(
 
     monkeypatch.setattr(videodownload, "download_video_for_discord", download)
     interaction = SimpleNamespace(
-        response=SimpleNamespace(defer=AsyncMock()),
+        response=SimpleNamespace(defer=AsyncMock(), is_done=Mock(return_value=True)),
         followup=SimpleNamespace(send=AsyncMock()),
         channel=FakeTextChannel(),
         user=SimpleNamespace(id=42, mention="<@42>"),
@@ -482,7 +485,10 @@ def test_video_command_send_failure_closes_file_and_cleans_request_directory(
     )
 
     assert interaction.followup.send.await_count == 1
-    assert interaction.followup.send.await_args.kwargs["ephemeral"] is True
+    assert interaction.followup.send.await_args.kwargs == {
+        "ephemeral": True,
+        "delete_after": 10,
+    }
     interaction.response.defer.assert_awaited_once_with(ephemeral=True)
     sent_file = interaction.channel.send.await_args.kwargs["file"]
     assert sent_file.fp.closed

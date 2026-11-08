@@ -5,10 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock, Mock, patch
 
 from cogs import photodownload
-
 
 URL = "https://www.instagram.com/p/DJj6CXry060/?utm_source=ig_web_copy_link&vrfl=MzRlODBiNWFlZA==&srtk=MzRlODBiNWFlZA=="
 
@@ -24,7 +24,9 @@ class PhotoDownloadTests(unittest.TestCase):
 
     def test_single_photo_download_completes_private_response(self):
         interaction = SimpleNamespace(
-            response=SimpleNamespace(defer=AsyncMock()),
+            response=SimpleNamespace(
+                defer=AsyncMock(), is_done=Mock(return_value=True)
+            ),
             followup=SimpleNamespace(send=AsyncMock()),
             channel=SimpleNamespace(send=AsyncMock()),
             user=SimpleNamespace(id=42, mention="<@42>"),
@@ -39,15 +41,21 @@ class PhotoDownloadTests(unittest.TestCase):
             patch.object(photodownload, "send_photos", new=send_photos),
         ):
             cog = photodownload.PhotoDownload(SimpleNamespace())
-            asyncio.run(
-                type(cog).download_photo.callback(cog, interaction, URL)
-            )
+            asyncio.run(type(cog).download_photo.callback(cog, interaction, URL))
 
         interaction.response.defer.assert_awaited_once_with(ephemeral=True)
         interaction.edit_original_response.assert_awaited_once_with(
-            content="Your photos were sent to the channel."
+            content="Your photo was sent to the channel."
         )
-        send_photos.assert_awaited_once()
+        interaction.edit_original_response.return_value.delete.assert_awaited_once_with(
+            delay=10
+        )
+        send_photos.assert_awaited_once_with(
+            interaction.channel,
+            interaction.user,
+            ["photo.jpg"],
+            "<@42> Here is your downloaded photo:",
+        )
 
     def test_photo_selection_error_remains_ephemeral_after_defer(self):
         request_dir = self.download_dir / "request"
@@ -59,14 +67,135 @@ class PhotoDownloadTests(unittest.TestCase):
         view = photodownload.PhotoSelectionView(
             original_interaction, ["photo.jpg"], request_dir
         )
+        prompt = SimpleNamespace(delete=AsyncMock())
+        view.prompt_message = cast(Any, prompt)
         selection = view.children[0]
         selection._values = ["0"]
         interaction = SimpleNamespace(
-            response=SimpleNamespace(defer=AsyncMock()),
+            response=SimpleNamespace(
+                defer=AsyncMock(), is_done=Mock(return_value=True)
+            ),
             user=owner,
             followup=SimpleNamespace(send=AsyncMock()),
             edit_original_response=AsyncMock(),
             message=SimpleNamespace(delete=AsyncMock()),
+        )
+
+        with (
+            patch.object(
+                photodownload,
+                "send_photos",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("send failed"),
+            ),
+            patch.object(
+                photodownload.asyncio, "sleep", new_callable=AsyncMock
+            ) as sleep,
+        ):
+            asyncio.run(selection.callback(interaction))
+
+        interaction.response.defer.assert_awaited_once_with(
+            ephemeral=True, thinking=True
+        )
+        interaction.followup.send.assert_awaited_once_with(
+            "The selected photo could not be sent.",
+            ephemeral=True,
+            delete_after=10,
+        )
+        prompt.delete.assert_awaited_once_with()
+        sleep.assert_not_awaited()
+
+    def test_selected_photo_deletes_ephemeral_prompt_after_three_seconds(self):
+        request_dir = self.download_dir / "request"
+        request_dir.mkdir()
+        owner = SimpleNamespace(id=42, mention="<@42>")
+        original = SimpleNamespace(channel=SimpleNamespace(), user=owner)
+        view = photodownload.PhotoSelectionView(
+            original, ["photo-1.jpg", "photo-2.jpg"], request_dir
+        )
+        prompt = SimpleNamespace(delete=AsyncMock())
+        view.prompt_message = cast(Any, prompt)
+        selection = view.children[0]
+        selection._values = ["1"]
+        interaction = SimpleNamespace(
+            response=SimpleNamespace(defer=AsyncMock()),
+            edit_original_response=AsyncMock(),
+            message=SimpleNamespace(delete=AsyncMock()),
+        )
+        calls = Mock()
+        send = AsyncMock()
+        sleep = AsyncMock()
+        calls.attach_mock(send, "send")
+        calls.attach_mock(sleep, "sleep")
+        calls.attach_mock(prompt.delete, "delete")
+
+        with (
+            patch.object(photodownload, "send_photos", new=send),
+            patch.object(photodownload.asyncio, "sleep", new=sleep),
+        ):
+            asyncio.run(selection.callback(interaction))
+
+        self.assertEqual(
+            calls.mock_calls,
+            [
+                unittest.mock.call.send(
+                    original.channel,
+                    owner,
+                    ["photo-2.jpg"],
+                    "<@42> Here is your selected photo:",
+                ),
+                unittest.mock.call.sleep(3),
+                unittest.mock.call.delete(),
+            ],
+        )
+        interaction.edit_original_response.assert_awaited_once_with(
+            content="Your photo was sent to the channel."
+        )
+        interaction.message.delete.assert_not_awaited()
+        self.assertFalse(request_dir.exists())
+
+    def test_multiple_selected_photos_use_plural_responses(self):
+        request_dir = self.download_dir / "request"
+        request_dir.mkdir()
+        owner = SimpleNamespace(id=42, mention="<@42>")
+        original = SimpleNamespace(channel=SimpleNamespace(), user=owner)
+        photos = ["photo-1.jpg", "photo-2.jpg"]
+        view = photodownload.PhotoSelectionView(original, photos, request_dir)
+        selection = view.children[0]
+        selection._values = ["0", "1"]
+        interaction = SimpleNamespace(
+            response=SimpleNamespace(defer=AsyncMock()),
+            edit_original_response=AsyncMock(),
+        )
+
+        with patch.object(photodownload, "send_photos", new_callable=AsyncMock) as send:
+            asyncio.run(selection.callback(interaction))
+
+        send.assert_awaited_once_with(
+            original.channel,
+            owner,
+            photos,
+            "<@42> Here are your selected photos:",
+        )
+        interaction.edit_original_response.assert_awaited_once_with(
+            content="Your photos were sent to the channel."
+        )
+
+    def test_multiple_selected_photos_use_plural_error(self):
+        request_dir = self.download_dir / "request"
+        request_dir.mkdir()
+        owner = SimpleNamespace(id=42, mention="<@42>")
+        original = SimpleNamespace(channel=SimpleNamespace(), user=owner)
+        view = photodownload.PhotoSelectionView(
+            original, ["photo-1.jpg", "photo-2.jpg"], request_dir
+        )
+        selection = view.children[0]
+        selection._values = ["0", "1"]
+        interaction = SimpleNamespace(
+            response=SimpleNamespace(
+                defer=AsyncMock(), is_done=Mock(return_value=True)
+            ),
+            followup=SimpleNamespace(send=AsyncMock()),
         )
 
         with patch.object(
@@ -77,12 +206,40 @@ class PhotoDownloadTests(unittest.TestCase):
         ):
             asyncio.run(selection.callback(interaction))
 
-        interaction.response.defer.assert_awaited_once_with(
-            ephemeral=True, thinking=True
-        )
         interaction.followup.send.assert_awaited_once_with(
-            "The selected photos could not be sent.", ephemeral=True
+            "The selected photos could not be sent.",
+            ephemeral=True,
+            delete_after=10,
         )
+
+    def test_photo_selection_prompt_deletion_failure_is_logged(self):
+        request_dir = self.download_dir / "request"
+        request_dir.mkdir()
+        owner = SimpleNamespace(id=42, mention="<@42>")
+        original = SimpleNamespace(channel=SimpleNamespace(), user=owner)
+        view = photodownload.PhotoSelectionView(original, ["photo.jpg"], request_dir)
+        error = photodownload.discord.HTTPException(
+            Mock(status=403, reason="Forbidden"), "Cannot delete prompt"
+        )
+        prompt = SimpleNamespace(delete=AsyncMock(side_effect=error))
+        view.prompt_message = cast(Any, prompt)
+        selection = view.children[0]
+        selection._values = ["0"]
+        interaction = SimpleNamespace(
+            response=SimpleNamespace(defer=AsyncMock()),
+            edit_original_response=AsyncMock(),
+        )
+
+        with (
+            patch.object(photodownload, "send_photos", new_callable=AsyncMock),
+            patch.object(photodownload.asyncio, "sleep", new_callable=AsyncMock),
+            self.assertLogs(photodownload.logger, level="ERROR") as logs,
+        ):
+            asyncio.run(selection.callback(interaction))
+
+        prompt.delete.assert_awaited_once_with()
+        self.assertIn("Failed to delete the photo selection", logs.output[0])
+        self.assertFalse(request_dir.exists())
 
     @patch.object(photodownload.subprocess, "run")
     @patch.object(photodownload.shutil, "which", return_value="/usr/bin/gallery-dl")
@@ -125,12 +282,16 @@ class PhotoDownloadTests(unittest.TestCase):
         )
         with (
             patch.object(photodownload, "send_photos", new_callable=AsyncMock) as send,
-            patch.object(view, "cleanup", new_callable=AsyncMock),
         ):
             for index in range(3):
                 with self.subTest(index=index):
+                    view = photodownload.PhotoSelectionView(
+                        original, photos, self.download_dir
+                    )
+                    selection = view.children[0]
                     selection._values = [str(index)]
-                    asyncio.run(selection.callback(interaction))
+                    with patch.object(view, "cleanup", new_callable=AsyncMock):
+                        asyncio.run(selection.callback(interaction))
                     self.assertEqual(
                         Path(send.await_args.args[2][0]).read_bytes(),
                         f"photo {index + 1}".encode(),
@@ -165,6 +326,80 @@ class PhotoDownloadTests(unittest.TestCase):
         self.assertEqual(len(selection.options), 20)
         self.assertEqual(selection.max_values, 20)
         self.assertEqual(selection.options[-1].label, "Image 20")
+
+    def test_cancel_selection_cleans_up_without_sending_photos(self):
+        request_dir = self.download_dir / "request"
+        request_dir.mkdir()
+        photo_path = request_dir / "photo.jpg"
+        photo_path.write_bytes(b"photo")
+        owner = SimpleNamespace(id=42, mention="<@42>")
+        original = SimpleNamespace(channel=SimpleNamespace(), user=owner)
+        view = photodownload.PhotoSelectionView(
+            original, [str(photo_path)], request_dir
+        )
+        cancel = cast(photodownload.PhotoSelectionCancel, view.children[1])
+        interaction = SimpleNamespace(
+            response=SimpleNamespace(edit_message=AsyncMock()),
+            user=owner,
+            message=SimpleNamespace(delete=AsyncMock()),
+        )
+
+        with patch.object(photodownload, "send_photos", new_callable=AsyncMock) as send:
+            asyncio.run(cancel.callback(cast(Any, interaction)))
+            asyncio.run(view.on_timeout())
+
+        interaction.response.edit_message.assert_awaited_once_with(
+            content="Photo selection canceled.", view=None
+        )
+        interaction.message.delete.assert_awaited_once_with(delay=5)
+        self.assertFalse(request_dir.exists())
+        send.assert_not_awaited()
+
+    def test_photo_selection_cancel_is_limited_to_requester(self):
+        owner = SimpleNamespace(id=42, mention="<@42>")
+        original = SimpleNamespace(channel=SimpleNamespace(), user=owner)
+        view = photodownload.PhotoSelectionView(
+            original, ["photo.jpg"], self.download_dir
+        )
+        unauthorized = SimpleNamespace(
+            user=SimpleNamespace(id=43),
+            response=SimpleNamespace(
+                is_done=Mock(return_value=False), send_message=AsyncMock()
+            ),
+        )
+
+        allowed = asyncio.run(view.interaction_check(unauthorized))
+
+        self.assertFalse(allowed)
+        unauthorized.response.send_message.assert_awaited_once_with(
+            "This image selection is not for you.",
+            ephemeral=True,
+            delete_after=10,
+        )
+
+    def test_photo_selection_timeout_still_sends_all_photos(self):
+        request_dir = self.download_dir / "request"
+        request_dir.mkdir()
+        photo_paths = [
+            str(request_dir / "photo-1.jpg"),
+            str(request_dir / "photo-2.jpg"),
+        ]
+        owner = SimpleNamespace(id=42, mention="<@42>")
+        original = SimpleNamespace(
+            channel=SimpleNamespace(send=AsyncMock()), user=owner
+        )
+        view = photodownload.PhotoSelectionView(original, photo_paths, request_dir)
+
+        with patch.object(photodownload, "send_photos", new_callable=AsyncMock) as send:
+            asyncio.run(view.on_timeout())
+
+        send.assert_awaited_once_with(
+            original.channel,
+            owner,
+            photo_paths,
+            "<@42> No images were selected; here are all the photos:",
+        )
+        self.assertFalse(request_dir.exists())
 
     def test_carousel_prompt_states_twenty_image_limit(self):
         interaction = SimpleNamespace(
