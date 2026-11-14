@@ -1,7 +1,7 @@
 # Discord Bot
 
 ![Production Build Status](https://github.com/d-daemon/discord-bot/actions/workflows/docker-image.yml/badge.svg?branch=main)
-![Python Version](https://img.shields.io/badge/Python-3.10_|_3.11_|_3.12_|_3.13_|_3.14_|_3.15-blue.svg)
+![Python Version](https://img.shields.io/badge/Python-3.11_|_3.12_|_3.13_|_3.14_|_3.15-blue.svg)
 ![License](https://img.shields.io/github/license/d-daemon/discord-bot)
 ![Docker Pulls](https://img.shields.io/docker/pulls/hhxcusco/discord-bot)
 ![Docker Image Size](https://img.shields.io/docker/image-size/hhxcusco/discord-bot/latest)
@@ -97,7 +97,7 @@ This section is for people contributing to the repository.
 
 ### Development setup
 
-The project supports Python `>=3.10, <3.16`. It uses [uv](https://docs.astral.sh/uv/) and the committed `uv.lock` to manage development dependencies.
+The project uses [uv](https://docs.astral.sh/uv/) and the committed `uv.lock` to manage development dependencies.
 
 1. Clone the repository and install the development dependencies:
 
