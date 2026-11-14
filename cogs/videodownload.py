@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import ipaddress
 import json
 import logging
@@ -396,10 +397,8 @@ def reencode_to_h264(input_path: str, output_path: str) -> str:
         raise RuntimeError(stderr or "ffmpeg re-encode failed")
 
     if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-        try:
+        with contextlib.suppress(OSError):
             os.remove(input_path)
-        except OSError:
-            pass
         return output_path
 
     raise RuntimeError("Re-encoded file not created")

@@ -3,7 +3,7 @@ import html
 import logging
 import os
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import discord
 import requests
@@ -211,10 +211,10 @@ class TranslationCog(commands.Cog):
 
     @tasks.loop(minutes=15)
     async def cleanup_translations(self):
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
         to_remove = []
         for message_id, translations in self.translated_messages.items():
-            for lang, (translation_id, timestamp) in translations.items():
+            for lang, (_translation_id, timestamp) in translations.items():
                 if current_time - timestamp > timedelta(hours=1):
                     to_remove.append((message_id, lang))
 
@@ -394,7 +394,7 @@ class TranslationCog(commands.Cog):
                 self.translated_messages[message_id] = {}
             self.translated_messages[message_id][target_lang] = (
                 sent_message.id,
-                datetime.now(timezone.utc),
+                datetime.now(UTC),
             )
 
             await message.add_reaction("❤️")
