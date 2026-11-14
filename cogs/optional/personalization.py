@@ -15,17 +15,16 @@ class Personalization(commands.Cog):
         self.bot = bot
 
     async def store_settings(self, settings):
-        async with self.bot.db_pool.acquire() as connection:
-            async with connection.transaction():
-                for key, value, guild_id in settings:
-                    await connection.execute(
-                        "INSERT INTO bot_settings (key, value, guild_id) VALUES ($1, $2, $3) "
-                        "ON CONFLICT (key, guild_id) DO UPDATE SET value = EXCLUDED.value, "
-                        "updated_at = CURRENT_TIMESTAMP",
-                        key,
-                        value,
-                        guild_id,
-                    )
+        async with self.bot.db_pool.acquire() as connection, connection.transaction():
+            for key, value, guild_id in settings:
+                await connection.execute(
+                    "INSERT INTO bot_settings (key, value, guild_id) VALUES ($1, $2, $3) "
+                    "ON CONFLICT (key, guild_id) DO UPDATE SET value = EXCLUDED.value, "
+                    "updated_at = CURRENT_TIMESTAMP",
+                    key,
+                    value,
+                    guild_id,
+                )
 
     @app_commands.command(name="personalize", description="Personalize the bot")
     @app_commands.describe(

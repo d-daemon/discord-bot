@@ -96,8 +96,10 @@ def format_message(author, content):
     return f"{author}: {content}"
 
 
-def embed_message(title, description, color=discord.Color.blue()):
+def embed_message(title, description, color):
     """Create a simple Discord embed."""
+    if color is None:
+        color = discord.Color.blue()
     embed = discord.Embed(title=title, description=description, color=color)
     return embed
 
